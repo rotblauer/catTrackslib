@@ -11,6 +11,7 @@ import (
 	"github.com/deet/simpleline"
 	"github.com/golang/geo/s2"
 	"github.com/rotblauer/trackpoints/trackPoint"
+	bolt "go.etcd.io/bbolt"
 )
 
 // http://blog.nobugware.com/post/2016/geo_db_s2_geohash_database/

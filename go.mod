@@ -15,7 +15,7 @@ require (
 	github.com/montanaflynn/stats v0.6.6
 	github.com/olahol/melody v0.0.0-20180227134253-7bd65910e5ab
 	github.com/rotblauer/tileTester2 v0.0.0-20190203193258-ee43a1e88d7e
-	github.com/rotblauer/trackpoints/trackPoint v0.0.0-20220630170348-f4cc23102652
+	github.com/rotblauer/trackpoints/trackPoint v0.0.0-20220630172156-84e70c5d820e
 	go.etcd.io/bbolt v1.3.6
 	googlemaps.github.io/maps v1.3.2
 )
