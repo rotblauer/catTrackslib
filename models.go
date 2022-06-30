@@ -35,6 +35,7 @@ import (
 	"github.com/kpawlik/geojson"
 	"github.com/rotblauer/tileTester2/note"
 	"github.com/rotblauer/trackpoints/trackPoint"
+	bolt "go.etcd.io/bbolt"
 	gm "googlemaps.github.io/maps"
 
 	"github.com/aws/aws-sdk-go/aws"
