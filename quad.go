@@ -8,6 +8,7 @@ import (
 
 	"github.com/asim/quadtree"
 	"github.com/rotblauer/trackpoints/trackPoint"
+	bolt "go.etcd.io/bbolt"
 )
 
 var (
