@@ -1,4 +1,4 @@
-package catTracks
+package catTrackslib
 
 import (
 	"fmt"
@@ -76,7 +76,7 @@ func parseQuery(r *http.Request, w http.ResponseWriter) *query {
 		return nil
 	}
 
-	//Still not that great
+	// Still not that great
 	if err := httpreq.NewParsingMap().
 		// Add("isbounded", httpreq.ToBool, &query.IsBounded).
 		Add("epsilon", httpreq.ToFloat64, &query.Epsilon).

@@ -1,4 +1,4 @@
-package catTracks
+package catTrackslib
 
 import (
 	"net/http"
@@ -20,7 +20,7 @@ func NewRouter() *mux.Router {
 			Name(route.Name).
 			Handler(handler)
 	}
-	//File server merveres
+	// File server merveres
 	ass := http.StripPrefix("/ass/", http.FileServer(http.Dir("./ass/")))
 	router.PathPrefix("/ass/").Handler(ass)
 

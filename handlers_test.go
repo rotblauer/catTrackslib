@@ -1,4 +1,4 @@
-package catTracks
+package catTrackslib
 
 import (
 	"testing"
