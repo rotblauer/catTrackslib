@@ -3,6 +3,9 @@
   <component name="ProjectModuleManager">
     <modules>
       <module fileurl="file://$PROJECT_DIR$/.idea/catTrackslib.iml" filepath="$PROJECT_DIR$/.idea/catTrackslib.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../catnotelib/.idea/catnotelib.iml" filepath="$PROJECT_DIR$/../catnotelib/.idea/catnotelib.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../tileTester2/.idea/tileTester2.iml" filepath="$PROJECT_DIR$/../tileTester2/.idea/tileTester2.iml" />
+      <module fileurl="file://$PROJECT_DIR$/../trackpoints/.idea/trackpoints.iml" filepath="$PROJECT_DIR$/../trackpoints/.idea/trackpoints.iml" />
     </modules>
   </component>
 </project>

@@ -20,7 +20,7 @@ import (
 	"github.com/gorilla/schema"
 	"github.com/kpawlik/geojson"
 
-	"github.com/rotblauer/tileTester2/note"
+	note "github.com/rotblauer/catnotelib"
 	"github.com/rotblauer/trackpoints/trackPoint"
 	// "os"
 	// "path"
