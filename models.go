@@ -1235,6 +1235,8 @@ func buildTrackpointKey(tp *trackPoint.TrackPoint) []byte {
 	return k
 }
 
+var errDuplicatePoint = fmt.Errorf("duplicate point")
+
 func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 	var err error
 	var visit note.NoteVisit
@@ -1268,7 +1270,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
 			if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
 				fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
-				return fmt.Errorf("duplicate point")
+				return errDuplicatePoint
 			}
 		}
 		// gets "" case nontestesing
