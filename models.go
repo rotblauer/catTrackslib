@@ -1120,14 +1120,12 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 	// 		NotifyNewPlace <- true
 	// 	}()
 	// }
-	plusn := 0
 	for _, point := range trackPoints {
 		visit, e := storePoint(point)
 		if e != nil {
 			log.Println("store point error: ", e)
 			continue
 		}
-		plusn++
 		var t2f *geojson.Feature
 		if tracksGZPath != "" || tracksGZPathEdge != "" || tracksGZPathDevop != "" {
 			t2f = TrackToFeature(point)
@@ -1147,18 +1145,7 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 			}
 		}
 	}
-	// 47131736
-	if tracksGZPath != "" {
-		p := filepath.Join(filepath.Dir(tracksGZPath), "TOTALTRACKSCOUNT")
-		b, be := ioutil.ReadFile(p)
-		if be == nil {
-			i, ie := strconv.Atoi(string(b))
-			if ie == nil {
-				i = i + plusn
-				ioutil.WriteFile(p, []byte(strconv.Itoa(i)), 0666)
-			}
-		}
-	}
+
 	if err == nil {
 		l := len(trackPoints)
 		err = storemetadata(trackPoints[l-1], l)
