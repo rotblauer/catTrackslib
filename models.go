@@ -1246,9 +1246,12 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 
 	err = GetDB("master").Update(func(tx *bolt.Tx) error {
 
-		b := tx.Bucket([]byte(trackKey))
+		trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
+		if err != nil {
+			return err
+		}
 
-		if exists := b.Get(tpBoltKey); exists != nil {
+		if exists := trackBucket.Get(tpBoltKey); exists != nil {
 			// make sure same cat
 			var existingTrackpoint trackPoint.TrackPoint
 			e := json.Unmarshal(exists, &existingTrackpoint)
@@ -1282,7 +1285,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			// decode base64 -> image
 			// define 'key' for s3 upload
 			b64 := ns.ImgB64
-			k := RandStringRunes(32)
+			k := fmt.Sprintf("%s_%s_%d", tp.Name, tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
 			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
 			ns.ImgB64 = ""
 			tp.Notes = ns.MustAsString()
@@ -1292,7 +1295,10 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 				}
 			}()
 
-			snapBuck := tx.Bucket([]byte(catsnapsKey))
+			snapBuck, err := tx.CreateBucketIfNotExists([]byte(catsnapsKey))
+			if err != nil {
+				return err
+			}
 			trackPointJSON, e := json.Marshal(tp)
 			if e != nil {
 				log.Println("Error marshaling catsnap JSON: err=", e)
@@ -1314,7 +1320,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			err = e
 			return err
 		}
-		e = b.Put(tpBoltKey, trackPointJSON)
+		e = trackBucket.Put(tpBoltKey, trackPointJSON)
 		if e != nil {
 			log.Println("Error storing trackpoint: err=", e)
 			err = e
