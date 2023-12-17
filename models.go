@@ -797,7 +797,10 @@ func getmetadata() (out []byte, err error) {
 func storemetadata(lastpoint *trackPoint.TrackPoint, lenpointsupdated int) error {
 	db := GetDB("master")
 	e := db.Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(statsKey))
+		b, err := tx.CreateBucketIfNotExists([]byte(statsKey))
+		if err != nil {
+			return err
+		}
 
 		// if not initialized, run the stats which takes a hot second
 		var keyN int
@@ -886,7 +889,10 @@ func storeLastKnown(tp *trackPoint.TrackPoint) {
 	// lastKnownMap[tp.Name] = tp
 	lk := LastKnown{}
 	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(statsKey))
+		b, err := tx.CreateBucketIfNotExists([]byte(statsKey))
+		if err != nil {
+			return err
+		}
 
 		v := b.Get([]byte("lastknown"))
 		if e := json.Unmarshal(v, &lk); e != nil {
@@ -1457,7 +1463,10 @@ func storeVisit(tx *bolt.Tx, key []byte, visit note.NoteVisit) error {
 		return fmt.Errorf("marshal visit err: %v", err)
 	}
 
-	pb := tx.Bucket([]byte(placesKey))
+	pb, err := tx.CreateBucketIfNotExists([]byte(placesKey))
+	if err != nil {
+		return err
+	}
 	err = pb.Put(key, visitJSON)
 	if err != nil {
 		return err
