@@ -26,14 +26,13 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/kpawlik/geojson"
-	"github.com/rotblauer/catnotelib"
+	note "github.com/rotblauer/catnotelib"
 	"github.com/rotblauer/trackpoints/trackPoint"
 	bolt "go.etcd.io/bbolt"
 	gm "googlemaps.github.io/maps"
@@ -1238,15 +1237,18 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 		return visit, fmt.Errorf("invalid coordinate: lng=%.14f", tp.Lng)
 	}
 
+	// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
+	tp.ID = tp.Time.UnixNano() // dunno if can really get nanoy, or if will just *1000.
+	tpBoltKey := buildTrackpointKey(tp)
+
+	// gets "" case nontestesing
+	tp.Name = getTestesPrefix() + tp.Name
+
 	err = GetDB("master").Update(func(tx *bolt.Tx) error {
+
 		b := tx.Bucket([]byte(trackKey))
 
-		// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
-		tp.ID = tp.Time.UnixNano() // dunno if can really get nanoy, or if will just *1000.
-
-		key := buildTrackpointKey(tp)
-
-		if exists := b.Get(key); exists != nil {
+		if exists := b.Get(tpBoltKey); exists != nil {
 			// make sure same cat
 			var existingTrackpoint trackPoint.TrackPoint
 			e := json.Unmarshal(exists, &existingTrackpoint)
@@ -1260,8 +1262,6 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 				return errDuplicatePoint
 			}
 		}
-		// gets "" case nontestesing
-		tp.Name = getTestesPrefix() + tp.Name
 
 		// handle storing place
 		ns, e := note.NotesField(tp.Notes).AsNoteStructured()
@@ -1299,7 +1299,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 				err = e
 				return err
 			}
-			e = snapBuck.Put(key, trackPointJSON)
+			e = snapBuck.Put(tpBoltKey, trackPointJSON)
 			if e != nil {
 				log.Println("Error storing catsnap: err=", e)
 				err = e
@@ -1314,7 +1314,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			err = e
 			return err
 		}
-		e = b.Put(key, trackPointJSON)
+		e = b.Put(tpBoltKey, trackPointJSON)
 		if e != nil {
 			log.Println("Error storing trackpoint: err=", e)
 			err = e
@@ -1332,7 +1332,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			visit.PlaceParsed = visit.Place.MustAsPlace()
 			visit.ReportedTime = tp.Time
 			visit.Duration = visit.GetDuration()
-			err = storeVisit(tx, key, visit)
+			err = storeVisit(tx, tpBoltKey, visit)
 			if err != nil {
 				return fmt.Errorf("storing visit err: %v", err)
 			}
