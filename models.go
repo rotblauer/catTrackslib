@@ -1290,7 +1290,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			ns.ImgB64 = ""
 			tp.Notes = ns.MustAsString()
 			go func() {
-				if e := storeImage(k, b64); e != nil {
+				if e := storeImageS3(k, b64); e != nil {
 					err = e
 				}
 			}()
@@ -1352,12 +1352,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 	return visit, err
 }
 
-// store image:
-// - decodes images from base64 to image.Image
-// - uploades image to s3
-// - adds link to s3 file to trackPoint
-// - removes base64 string from trackPoint
-func storeImage(key, b64 string) error {
+func storeImageS3(key, b64 string) error {
 	// Decode
 	unbased, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
