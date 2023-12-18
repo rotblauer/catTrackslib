@@ -1253,25 +1253,25 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 
 	err = GetDB("master").Update(func(tx *bolt.Tx) error {
 
-		trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
-		if err != nil {
-			return err
-		}
-
-		if exists := trackBucket.Get(tpBoltKey); exists != nil {
-			// make sure same cat
-			var existingTrackpoint trackPoint.TrackPoint
-			e := json.Unmarshal(exists, &existingTrackpoint)
-			if e != nil {
-				fmt.Println("Checking on an existing trackpoint and got an error with one of the existing trackpoints unmarshaling.")
-				return fmt.Errorf("unmarshal error: %v", e)
-			}
-			// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
-			if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
-				fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
-				return errDuplicatePoint
-			}
-		}
+		// trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
+		// if err != nil {
+		// 	return err
+		// }
+		//
+		// if exists := trackBucket.Get(tpBoltKey); exists != nil {
+		// 	// make sure same cat
+		// 	var existingTrackpoint trackPoint.TrackPoint
+		// 	e := json.Unmarshal(exists, &existingTrackpoint)
+		// 	if e != nil {
+		// 		fmt.Println("Checking on an existing trackpoint and got an error with one of the existing trackpoints unmarshaling.")
+		// 		return fmt.Errorf("unmarshal error: %v", e)
+		// 	}
+		// 	// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
+		// 	if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
+		// 		fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
+		// 		return errDuplicatePoint
+		// 	}
+		// }
 
 		// handle storing place
 		ns, e := note.NotesField(tp.Notes).AsNoteStructured()
