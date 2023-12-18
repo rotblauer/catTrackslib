@@ -1273,11 +1273,14 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 		// 	}
 		// }
 
-		// handle storing place
+		if tp.Notes == "" {
+			return nil
+		}
+		// handle storing images
 		ns, e := note.NotesField(tp.Notes).AsNoteStructured()
 		if e != nil {
 			err = e
-			return e
+			return fmt.Errorf("decode notes error: %w", e)
 		}
 
 		shouldHandleImages := false
@@ -1318,7 +1321,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 				err = e
 				return err
 			}
-			fmt.Println("Saved catsnap: ", tp)
+			log.Println("Saved catsnap: ", tp)
 		}
 
 		// trackPointJSON, e := json.Marshal(tp)
@@ -1354,7 +1357,7 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 		return err
 	})
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 	return visit, err
 }
