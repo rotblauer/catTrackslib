@@ -339,7 +339,9 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 			for _, feat := range gjfc {
 				tr, err := FeatureToTrack(feat)
 				if err != nil {
-					log.Println("error converting feature to trackpoint", err)
+					log.Println("error converting feature to trackpoint:", err)
+					log.Println("body", string(by))
+					log.Println("feature", feat)
 					continue
 				}
 				trackPoints = append(trackPoints, &tr)

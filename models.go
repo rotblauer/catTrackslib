@@ -1047,7 +1047,11 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 func FeatureToTrack(f geojson.Feature) (trackPoint.TrackPoint, error) {
 	var err error
 	tp := trackPoint.TrackPoint{}
-	point, ok := f.Geometry.(geojson.Point)
+	g, err := f.GetGeometry()
+	if err != nil {
+		return tp, err
+	}
+	point, ok := g.(*geojson.Point)
 	if !ok {
 		return tp, errors.New("not a point")
 	}
