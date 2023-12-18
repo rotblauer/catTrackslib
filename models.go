@@ -1335,21 +1335,21 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 		}
 		fmt.Println("Saved trackpoint: ", tp)
 
-		if ns.HasValidVisit() {
-			visit, err = ns.Visit.AsVisit()
-			if err != nil {
-				return fmt.Errorf("as visit err: %v", err)
-			}
-			visit.Uuid = tp.Uuid
-			visit.Name = tp.Name
-			visit.PlaceParsed = visit.Place.MustAsPlace()
-			visit.ReportedTime = tp.Time
-			visit.Duration = visit.GetDuration()
-			err = storeVisit(tx, tpBoltKey, visit)
-			if err != nil {
-				return fmt.Errorf("storing visit err: %v", err)
-			}
-		}
+		// if ns.HasValidVisit() {
+		// 	visit, err = ns.Visit.AsVisit()
+		// 	if err != nil {
+		// 		return fmt.Errorf("as visit err: %v", err)
+		// 	}
+		// 	visit.Uuid = tp.Uuid
+		// 	visit.Name = tp.Name
+		// 	visit.PlaceParsed = visit.Place.MustAsPlace()
+		// 	visit.ReportedTime = tp.Time
+		// 	visit.Duration = visit.GetDuration()
+		// 	err = storeVisit(tx, tpBoltKey, visit)
+		// 	if err != nil {
+		// 		return fmt.Errorf("storing visit err: %v", err)
+		// 	}
+		// }
 
 		return err
 	})
