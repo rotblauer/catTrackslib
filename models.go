@@ -1126,6 +1126,7 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 	// 	}()
 	// }
 	for _, point := range trackPoints {
+		// storePoint can modify the point, like tp.ID, tp.imgS3 field
 		visit, e := storePoint(point)
 		if e != nil {
 			log.Println("store point error: ", e)
