@@ -1044,6 +1044,65 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	return geojson.NewFeature(p, props, 1)
 }
 
+func FeatureToTrack(f geojson.Feature) (trackPoint.TrackPoint, error) {
+	var err error
+	tp := trackPoint.TrackPoint{}
+	point, ok := f.Geometry.(geojson.Point)
+	if !ok {
+		return tp, errors.New("not a point")
+	}
+	tp.Lat = float64(point.Coordinates[1])
+	tp.Lng = float64(point.Coordinates[0])
+	if v, ok := f.Properties["UUID"]; ok {
+		tp.Uuid = v.(string)
+	}
+	if v, ok := f.Properties["Name"]; ok {
+		tp.Name = v.(string)
+	}
+	if v, ok := f.Properties["Time"]; ok {
+		tp.Time, err = time.Parse(time.RFC3339, v.(string))
+		if err != nil {
+			return tp, err
+		}
+	}
+	if v, ok := f.Properties["Version"]; ok {
+		tp.Version = v.(string)
+	}
+	if v, ok := f.Properties["Speed"]; ok {
+		tp.Speed = v.(float64)
+	}
+	if v, ok := f.Properties["Elevation"]; ok {
+		tp.Elevation = v.(float64)
+	}
+	if v, ok := f.Properties["Heading"]; ok {
+		tp.Heading = v.(float64)
+	}
+	if v, ok := f.Properties["Accuracy"]; ok {
+		tp.Accuracy = v.(float64)
+	}
+	if v, ok := f.Properties["HeartRate"]; ok {
+		tp.HeartRate = v.(float64)
+	}
+	anyNotes := false
+	notes := note.NoteStructured{}
+	if v, ok := f.Properties["Activity"]; ok {
+		notes.Activity = v.(string)
+		anyNotes = true
+	}
+	if v, ok := f.Properties["Pressure"]; ok {
+		notes.Pressure = v.(float64)
+		anyNotes = true
+	}
+	if v, ok := f.Properties["imgS3"]; ok {
+		notes.ImgS3 = v.(string)
+		anyNotes = true
+	}
+	if anyNotes {
+		tp.Notes = notes.MustAsString()
+	}
+	return tp, nil
+}
+
 func TrackToPlace(tp *trackPoint.TrackPoint, visit note.NoteVisit) *geojson.Feature {
 	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(visit.PlaceParsed.Lng), geojson.Coord(visit.PlaceParsed.Lat)})
 

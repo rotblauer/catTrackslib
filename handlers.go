@@ -295,13 +295,14 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var ndbod []byte
 	err = json.Unmarshal(bod, &trackPoints)
 	// err = json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(bod))).Decode(&trackPoints)
 	if err != nil {
 		log.Println("Could not decode json as array, body length was:", len(bod))
 
 		// try decoding as ndjson..
-		ndbod := toJSONbuffer(ioutil.NopCloser(bytes.NewBuffer(bod)))
+		ndbod = toJSONbuffer(ioutil.NopCloser(bytes.NewBuffer(bod)))
 
 		log.Println("attempting decode as ndjson instead..., length:", len(ndbod), string(ndbod))
 
@@ -316,6 +317,33 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 			return
 		} else {
 			log.Println("OK: decoded request as ndjson instead")
+		}
+	}
+	if len(trackPoints) != 0 && trackPoints[0].Name == "" {
+		log.Println("WARNING: trackpoints posted without name, trying geojson decode...")
+		// maybe we accidentally unmarshalled geosjon points as trackpoints
+		// try to unmarshal as geojson
+		gjfc := []geojson.Feature{}
+		by := bod
+		if ndbod != nil {
+			by = ndbod
+		}
+		err = json.Unmarshal(by, &gjfc)
+		if err != nil {
+			log.Println("could not decode req as geojson, error:", err.Error())
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		} else {
+			log.Println("OK: decoded request as geojson instead")
+			trackPoints = trackPoint.TrackPoints{}
+			for _, feat := range gjfc {
+				tr, err := FeatureToTrack(feat)
+				if err != nil {
+					log.Println("error converting feature to trackpoint", err)
+					continue
+				}
+				trackPoints = append(trackPoints, &tr)
+			}
 		}
 	}
 
