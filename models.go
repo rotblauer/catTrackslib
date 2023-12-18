@@ -1321,19 +1321,19 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			fmt.Println("Saved catsnap: ", tp)
 		}
 
-		trackPointJSON, e := json.Marshal(tp)
-		if e != nil {
-			log.Println("Error marshaling trackpoint JSON: err=", e)
-			err = e
-			return err
-		}
-		e = trackBucket.Put(tpBoltKey, trackPointJSON)
-		if e != nil {
-			log.Println("Error storing trackpoint: err=", e)
-			err = e
-			return err
-		}
-		fmt.Println("Saved trackpoint: ", tp)
+		// trackPointJSON, e := json.Marshal(tp)
+		// if e != nil {
+		// 	log.Println("Error marshaling trackpoint JSON: err=", e)
+		// 	err = e
+		// 	return err
+		// }
+		// e = trackBucket.Put(tpBoltKey, trackPointJSON)
+		// if e != nil {
+		// 	log.Println("Error storing trackpoint: err=", e)
+		// 	err = e
+		// 	return err
+		// }
+		// fmt.Println("Saved trackpoint: ", tp)
 
 		// if ns.HasValidVisit() {
 		// 	visit, err = ns.Visit.AsVisit()
