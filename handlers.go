@@ -259,7 +259,8 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	w.Header().Add("Access-Control-Allow-Origin", "*")
 	w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
 
-	log.Println("handling pop:", r)
+	dump, _ := httputil.DumpRequest(r, false)
+	log.Println("/populate/:", string(dump))
 
 	var trackPoints trackPoint.TrackPoints
 

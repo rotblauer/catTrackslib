@@ -980,6 +980,16 @@ func CloseGZ(f F) {
 // 	return geojson.NewFeature(p, props, 1)
 // }
 
+// https://stackoverflow.com/questions/18390266/how-can-we-truncate-float64-type-to-a-particular-precision
+func round(num float64) int {
+	return int(num + math.Copysign(0.5, num))
+}
+
+func toFixed(num float64, precision int) float64 {
+	output := math.Pow(10, float64(precision))
+	return float64(round(num*output)) / output
+}
+
 func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	// convert to a feature
 	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(trackPointCurrent.Lng), geojson.Coord(trackPointCurrent.Lat)})
@@ -1003,7 +1013,7 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 
 	if ns, e := note.NotesField(trackPointCurrent.Notes).AsNoteStructured(); e == nil {
 		props["Activity"] = ns.Activity
-		props["Pressure"] = ns.Pressure
+		props["Pressure"] = toFixed(ns.Pressure, 2)
 		if ns.CustomNote != "" {
 			props["Notes"] = ns.CustomNote
 		}
@@ -1017,9 +1027,40 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 
 		if trackPointCurrent.HeartRate == 0 {
 			if i := ns.HeartRateI(); i > 0 {
-				props["HeartRate"] = i
+				props["HeartRate"] = toFixed(i, 2)
 			}
 		}
+
+		// these properties might exist in the track, but we haven't been dumping them to json,
+		// they're not deal breakers, but nice to have
+		if ns.NumberOfSteps != 0 {
+			props["NumberOfSteps"] = ns.NumberOfSteps
+		}
+		if ns.AverageActivePace != 0 {
+			props["AverageActivePace"] = toFixed(ns.AverageActivePace, 2)
+		}
+		if ns.CurrentPace != 0 {
+			props["CurrentPace"] = toFixed(ns.CurrentPace, 2)
+		}
+		if ns.CurrentCadence != 0 {
+			props["CurrentCadence"] = toFixed(ns.CurrentCadence, 2)
+		}
+		if ns.CustomNote != "" {
+			props["CustomNote"] = ns.CustomNote
+		}
+		if ns.FloorsAscended != 0 {
+			props["FloorsAscended"] = ns.FloorsAscended
+		}
+		if ns.FloorsDescended != 0 {
+			props["FloorsDescended"] = ns.FloorsDescended
+		}
+		if !ns.CurrentTripStart.IsZero() {
+			props["CurrentTripStart"] = ns.CurrentTripStart
+		}
+		if ns.Distance != 0 {
+			props["Distance"] = toFixed(ns.Distance, 2)
+		}
+
 		// if trackPointCurrent.HeartRate == 0 && ns.HeartRateType != "" {
 		// 	props["HeartRateType"] = ns.HeartRateType
 		// }
