@@ -356,11 +356,11 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		log.Println("ERROR: no COTOKEN env var set")
 	} else {
 		log.Println("GOODNEWS: using COTOKEN for cat verification")
-		log.Println()
-		if b, _ := httputil.DumpRequest(r, true); b != nil {
-			log.Println(string(b))
-		}
-		log.Println()
+		// log.Println()
+		// if b, _ := httputil.DumpRequest(r, true); b != nil {
+		// 	log.Println(string(b))
+		// }
+		// log.Println()
 		verified := false
 		headerKey := "AuthorizationOfCats"
 		if h := r.Header.Get(headerKey); h != "" {
