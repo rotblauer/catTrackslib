@@ -1006,6 +1006,10 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	props["Heading"] = trackPointCurrent.Heading
 	props["Accuracy"] = trackPointCurrent.Accuracy
 
+	if trackPointCurrent.VAccuracy > 0 {
+		props["vAccuracy"] = trackPointCurrent.VAccuracy
+	}
+
 	// not implemented yet
 	if hr := trackPointCurrent.HeartRate; hr != 0 {
 		props["HeartRate"] = hr
@@ -1355,7 +1359,9 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 	// gets "" case nontestesing
 	tp.Name = getTestesPrefix() + tp.Name
 
-	err = GetDB("master").Update(func(tx *bolt.Tx) error {
+	_db := GetDB("master")
+
+	err = _db.Update(func(tx *bolt.Tx) error {
 
 		// trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
 		// if err != nil {
@@ -1403,8 +1409,24 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
 			ns.ImgB64 = ""
 			tp.Notes = ns.MustAsString()
+			jpegBytes, jpegErr := b64ToJPGBytes(b64)
+			if jpegErr != nil {
+				log.Println("Error converting b64 to jpeg bytes: err=", jpegErr)
+				return jpegErr
+			}
 			go func() {
-				if e := storeImageS3(k, b64); e != nil {
+				// save jpg to fs
+				dbRootDir := filepath.Dir(_db.Path())
+				catsnapsDir := filepath.Join(dbRootDir, "catsnaps")
+				os.MkdirAll(catsnapsDir, 0755)
+				imagePath := filepath.Join(catsnapsDir, k+".jpg")
+				if e := os.WriteFile(imagePath, jpegBytes, 0644); e != nil {
+					log.Println("Error writing catsnap to fs: err=", e)
+					err = e
+				}
+			}()
+			go func() {
+				if e := storeImageS3(k, jpegBytes); e != nil {
 					err = e
 				}
 			}()
@@ -1466,25 +1488,29 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 	return visit, err
 }
 
-func storeImageS3(key, b64 string) error {
+func b64ToJPGBytes(b64 string) ([]byte, error) {
 	// Decode
 	unbased, err := base64.StdEncoding.DecodeString(b64)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	r := bytes.NewReader(unbased)
 	im, err := jpeg.Decode(r)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	b := []byte{}
 	buf := bytes.NewBuffer(b)
-	err = jpeg.Encode(buf, im, nil)
+	err = jpeg.Encode(buf, im, &jpeg.Options{Quality: 100})
 	if err != nil {
-		return err
+		return nil, err
 	}
+	return buf.Bytes(), nil
+}
+
+func storeImageS3(key string, jpegBytes []byte) (err error) {
 
 	// S3
 
@@ -1519,9 +1545,9 @@ func storeImageS3(key, b64 string) error {
 	_, err = svc.PutObjectWithContext(ctx, &s3.PutObjectInput{
 		Bucket:        aws.String(bucket),
 		Key:           aws.String(key),
-		Body:          bytes.NewReader(buf.Bytes()),
+		Body:          bytes.NewReader(jpegBytes),
 		ContentType:   aws.String("image/jpeg"),
-		ContentLength: aws.Int64(int64(buf.Len())),
+		ContentLength: aws.Int64(int64(len(jpegBytes))),
 	})
 	if err != nil {
 		if aerr, ok := err.(awserr.Error); ok && aerr.Code() == request.CanceledErrorCode {
