@@ -1393,20 +1393,52 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 			return fmt.Errorf("decode notes error: %w", e)
 		}
 
-		shouldHandleImages := false
-		if ns.HasRawImage() && os.Getenv("AWS_BUCKETNAME") == "" {
-			fmt.Println("saw image, but not configured for s3 upload, skipping image processing")
-			// NOTE: that this makes an incongruence between Freya and Rottor
-			ns.ImgB64 = "" // don't save the long string
-		} else {
-			shouldHandleImages = true
-		}
-		if ns.HasRawImage() && shouldHandleImages {
+		if ns.HasRawImage() {
 			// decode base64 -> image
 			// define 'key' for s3 upload
 			b64 := ns.ImgB64
-			k := fmt.Sprintf("%s_%s_%d", tp.Name, tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
-			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
+			sanitizeName := func(s string) string {
+				s = strings.ReplaceAll(s, " ", "_")
+				s = strings.ReplaceAll(s, "/", "_")
+				s = strings.ReplaceAll(s, "\\", "_")
+				s = strings.ReplaceAll(s, ":", "_")
+				s = strings.ReplaceAll(s, ";", "_")
+				s = strings.ReplaceAll(s, ",", "_")
+				s = strings.ReplaceAll(s, ".", "_")
+				s = strings.ReplaceAll(s, "?", "_")
+				s = strings.ReplaceAll(s, "!", "_")
+				s = strings.ReplaceAll(s, "@", "_")
+				s = strings.ReplaceAll(s, "#", "_")
+				s = strings.ReplaceAll(s, "$", "_")
+				s = strings.ReplaceAll(s, "%", "_")
+				s = strings.ReplaceAll(s, "^", "_")
+				s = strings.ReplaceAll(s, "&", "_")
+				s = strings.ReplaceAll(s, "*", "_")
+				s = strings.ReplaceAll(s, "(", "_")
+				s = strings.ReplaceAll(s, ")", "_")
+				s = strings.ReplaceAll(s, "+", "_")
+				s = strings.ReplaceAll(s, "=", "_")
+				s = strings.ReplaceAll(s, "~", "_")
+				s = strings.ReplaceAll(s, "`", "_")
+				s = strings.ReplaceAll(s, "[", "_")
+				s = strings.ReplaceAll(s, "]", "_")
+				s = strings.ReplaceAll(s, "{", "_")
+				s = strings.ReplaceAll(s, "}", "_")
+				s = strings.ReplaceAll(s, "<", "_")
+				s = strings.ReplaceAll(s, ">", "_")
+				s = strings.ReplaceAll(s, "|", "_")
+				s = strings.ReplaceAll(s, "\"", "_")
+				s = strings.ReplaceAll(s, "'", "_")
+				return s
+			}
+			k := fmt.Sprintf("%s_%s_%d", sanitizeName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
+			if os.Getenv("AWS_BUCKETNAME") != "" {
+				ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
+			} else {
+				// won't be an s3 url, but will have a sufficient filename for indexing
+				ns.ImgS3 = k
+			}
+
 			ns.ImgB64 = ""
 			tp.Notes = ns.MustAsString()
 			jpegBytes, jpegErr := b64ToJPGBytes(b64)
@@ -1425,11 +1457,13 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 					err = e
 				}
 			}()
-			go func() {
-				if e := storeImageS3(k, jpegBytes); e != nil {
-					err = e
-				}
-			}()
+			if os.Getenv("AWS_BUCKETNAME") != "" {
+				go func() {
+					if e := storeImageS3(k, jpegBytes); e != nil {
+						err = e
+					}
+				}()
+			}
 
 			snapBuck, err := tx.CreateBucketIfNotExists([]byte(catsnapsKey))
 			if err != nil {
