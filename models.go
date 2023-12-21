@@ -1038,31 +1038,31 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 
 		// these properties might exist in the track, but we haven't been dumping them to json,
 		// they're not deal breakers, but nice to have
-		if ns.NumberOfSteps != 0 {
+		if ns.NumberOfSteps > 0 {
 			props["NumberOfSteps"] = ns.NumberOfSteps
 		}
-		if ns.AverageActivePace != 0 {
+		if ns.AverageActivePace > 0 {
 			props["AverageActivePace"] = toFixed(ns.AverageActivePace, 2)
 		}
-		if ns.CurrentPace != 0 {
+		if ns.CurrentPace > 0 {
 			props["CurrentPace"] = toFixed(ns.CurrentPace, 2)
 		}
-		if ns.CurrentCadence != 0 {
+		if ns.CurrentCadence > 0 {
 			props["CurrentCadence"] = toFixed(ns.CurrentCadence, 2)
 		}
 		if ns.CustomNote != "" {
 			props["CustomNote"] = ns.CustomNote
 		}
-		if ns.FloorsAscended != 0 {
+		if ns.FloorsAscended > 0 {
 			props["FloorsAscended"] = ns.FloorsAscended
 		}
-		if ns.FloorsDescended != 0 {
+		if ns.FloorsDescended > 0 {
 			props["FloorsDescended"] = ns.FloorsDescended
 		}
 		if !ns.CurrentTripStart.IsZero() {
 			props["CurrentTripStart"] = ns.CurrentTripStart
 		}
-		if ns.Distance != 0 {
+		if ns.Distance > 0 {
 			props["Distance"] = toFixed(ns.Distance, 2)
 		}
 
