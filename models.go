@@ -910,7 +910,8 @@ func storeLastKnown(tp *trackPoint.TrackPoint) {
 	}); err != nil {
 		log.Printf("error storing last known: %v", err)
 	} else {
-		log.Printf("stored last known: lk=%v\ntp=%v", lk, tp)
+		spewTP := spew.Sdump(tp)
+		log.Printf("updated last known=%v\ncurrent=%s", lk, spewTP)
 	}
 }
 
