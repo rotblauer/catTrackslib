@@ -544,7 +544,7 @@ func uploadCSV(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		_, errS := storePoint(tp)
+		errS := storePoint(tp)
 		if errS != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

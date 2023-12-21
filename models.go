@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"github.com/davecgh/go-spew/spew"
+	"github.com/golang/groupcache/lru"
 	"github.com/kpawlik/geojson"
 	note "github.com/rotblauer/catnotelib"
 	"github.com/rotblauer/trackpoints/trackPoint"
@@ -1236,7 +1237,7 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 	// }
 	for _, point := range trackPoints {
 		// storePoint can modify the point, like tp.ID, tp.imgS3 field
-		visit, e := storePoint(point)
+		e := storePoint(point)
 		if e != nil {
 			log.Println("store point error: ", e)
 			continue
@@ -1251,14 +1252,14 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 		if tracksGZPathEdge != "" {
 			featureChanEdge <- t2f
 		}
-		// tp has note has visit
-		if !visit.ReportedTime.IsZero() && placesLayer {
-			FeaturePlaceChan <- TrackToPlace(point, visit)
-			if err := storePointVisit(point, visit); err != nil {
-				log.Println("err storing point visit:", err)
-				continue
-			}
-		}
+		// // tp has note has visit
+		// if !visit.ReportedTime.IsZero() && placesLayer {
+		// 	FeaturePlaceChan <- TrackToPlace(point, visit)
+		// 	if err := storePointVisit(point, visit); err != nil {
+		// 		log.Println("err storing point visit:", err)
+		// 		continue
+		// 	}
+		// }
 	}
 
 	if err == nil {
@@ -1339,18 +1340,19 @@ func buildTrackpointKey(tp *trackPoint.TrackPoint) []byte {
 
 var errDuplicatePoint = fmt.Errorf("duplicate point")
 
-func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
+var dedupeCache = lru.New(500_000)
+
+func storePoint(tp *trackPoint.TrackPoint) error {
 	var err error
-	var visit note.NoteVisit
 	if tp.Time.IsZero() {
 		tp.Time = time.Now()
 	}
 
 	if tp.Lat > 90 || tp.Lat < -90 {
-		return visit, fmt.Errorf("invalid coordinate: lat=%.14f", tp.Lat)
+		return fmt.Errorf("invalid coordinate: lat=%.14f", tp.Lat)
 	}
 	if tp.Lng > 180 || tp.Lng < -180 {
-		return visit, fmt.Errorf("invalid coordinate: lng=%.14f", tp.Lng)
+		return fmt.Errorf("invalid coordinate: lng=%.14f", tp.Lng)
 	}
 
 	// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
@@ -1360,111 +1362,118 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 	// gets "" case nontestesing
 	tp.Name = getTestesPrefix() + tp.Name
 
-	_db := GetDB("master")
+	if _, ok := dedupeCache.Get(string(tpBoltKey)); ok {
+		// duplicate point
+		return errDuplicatePoint
+	}
+	dedupeCache.Add(string(tpBoltKey), true)
 
-	err = _db.Update(func(tx *bolt.Tx) error {
+	if tp.Notes == "" {
+		return nil
+	}
+	// handle storing images
+	ns, e := note.NotesField(tp.Notes).AsNoteStructured()
+	if e != nil {
+		err = e
+		return fmt.Errorf("decode notes error: %w", e)
+	}
 
-		// trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
-		// if err != nil {
-		// 	return err
-		// }
-		//
-		// if exists := trackBucket.Get(tpBoltKey); exists != nil {
-		// 	// make sure same cat
-		// 	var existingTrackpoint trackPoint.TrackPoint
-		// 	e := json.Unmarshal(exists, &existingTrackpoint)
-		// 	if e != nil {
-		// 		fmt.Println("Checking on an existing trackpoint and got an error with one of the existing trackpoints unmarshaling.")
-		// 		return fmt.Errorf("unmarshal error: %v", e)
-		// 	}
-		// 	// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
-		// 	if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
-		// 		fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
-		// 		return errDuplicatePoint
-		// 	}
-		// }
-
-		if tp.Notes == "" {
-			return nil
+	if ns.HasRawImage() {
+		// decode base64 -> image
+		// define 'key' for s3 upload
+		b64 := ns.ImgB64
+		sanitizeName := func(s string) string {
+			s = strings.ReplaceAll(s, " ", "_")
+			s = strings.ReplaceAll(s, "/", "_")
+			s = strings.ReplaceAll(s, "\\", "_")
+			s = strings.ReplaceAll(s, ":", "_")
+			s = strings.ReplaceAll(s, ";", "_")
+			s = strings.ReplaceAll(s, ",", "_")
+			s = strings.ReplaceAll(s, ".", "_")
+			s = strings.ReplaceAll(s, "?", "_")
+			s = strings.ReplaceAll(s, "!", "_")
+			s = strings.ReplaceAll(s, "@", "_")
+			s = strings.ReplaceAll(s, "#", "_")
+			s = strings.ReplaceAll(s, "$", "_")
+			s = strings.ReplaceAll(s, "%", "_")
+			s = strings.ReplaceAll(s, "^", "_")
+			s = strings.ReplaceAll(s, "&", "_")
+			s = strings.ReplaceAll(s, "*", "_")
+			s = strings.ReplaceAll(s, "(", "_")
+			s = strings.ReplaceAll(s, ")", "_")
+			s = strings.ReplaceAll(s, "+", "_")
+			s = strings.ReplaceAll(s, "=", "_")
+			s = strings.ReplaceAll(s, "~", "_")
+			s = strings.ReplaceAll(s, "`", "_")
+			s = strings.ReplaceAll(s, "[", "_")
+			s = strings.ReplaceAll(s, "]", "_")
+			s = strings.ReplaceAll(s, "{", "_")
+			s = strings.ReplaceAll(s, "}", "_")
+			s = strings.ReplaceAll(s, "<", "_")
+			s = strings.ReplaceAll(s, ">", "_")
+			s = strings.ReplaceAll(s, "|", "_")
+			s = strings.ReplaceAll(s, "\"", "_")
+			s = strings.ReplaceAll(s, "'", "_")
+			return s
 		}
-		// handle storing images
-		ns, e := note.NotesField(tp.Notes).AsNoteStructured()
-		if e != nil {
-			err = e
-			return fmt.Errorf("decode notes error: %w", e)
+		k := fmt.Sprintf("%s_%s_%d", sanitizeName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
+		if os.Getenv("AWS_BUCKETNAME") != "" {
+			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
+		} else {
+			// won't be an s3 url, but will have a sufficient filename for indexing
+			ns.ImgS3 = k
 		}
 
-		if ns.HasRawImage() {
-			// decode base64 -> image
-			// define 'key' for s3 upload
-			b64 := ns.ImgB64
-			sanitizeName := func(s string) string {
-				s = strings.ReplaceAll(s, " ", "_")
-				s = strings.ReplaceAll(s, "/", "_")
-				s = strings.ReplaceAll(s, "\\", "_")
-				s = strings.ReplaceAll(s, ":", "_")
-				s = strings.ReplaceAll(s, ";", "_")
-				s = strings.ReplaceAll(s, ",", "_")
-				s = strings.ReplaceAll(s, ".", "_")
-				s = strings.ReplaceAll(s, "?", "_")
-				s = strings.ReplaceAll(s, "!", "_")
-				s = strings.ReplaceAll(s, "@", "_")
-				s = strings.ReplaceAll(s, "#", "_")
-				s = strings.ReplaceAll(s, "$", "_")
-				s = strings.ReplaceAll(s, "%", "_")
-				s = strings.ReplaceAll(s, "^", "_")
-				s = strings.ReplaceAll(s, "&", "_")
-				s = strings.ReplaceAll(s, "*", "_")
-				s = strings.ReplaceAll(s, "(", "_")
-				s = strings.ReplaceAll(s, ")", "_")
-				s = strings.ReplaceAll(s, "+", "_")
-				s = strings.ReplaceAll(s, "=", "_")
-				s = strings.ReplaceAll(s, "~", "_")
-				s = strings.ReplaceAll(s, "`", "_")
-				s = strings.ReplaceAll(s, "[", "_")
-				s = strings.ReplaceAll(s, "]", "_")
-				s = strings.ReplaceAll(s, "{", "_")
-				s = strings.ReplaceAll(s, "}", "_")
-				s = strings.ReplaceAll(s, "<", "_")
-				s = strings.ReplaceAll(s, ">", "_")
-				s = strings.ReplaceAll(s, "|", "_")
-				s = strings.ReplaceAll(s, "\"", "_")
-				s = strings.ReplaceAll(s, "'", "_")
-				return s
-			}
-			k := fmt.Sprintf("%s_%s_%d", sanitizeName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
-			if os.Getenv("AWS_BUCKETNAME") != "" {
-				ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
-			} else {
-				// won't be an s3 url, but will have a sufficient filename for indexing
-				ns.ImgS3 = k
-			}
+		ns.ImgB64 = ""
+		tp.Notes = ns.MustAsString()
+		jpegBytes, jpegErr := b64ToJPGBytes(b64)
+		if jpegErr != nil {
+			log.Println("Error converting b64 to jpeg bytes: err=", jpegErr)
+			return jpegErr
+		}
 
-			ns.ImgB64 = ""
-			tp.Notes = ns.MustAsString()
-			jpegBytes, jpegErr := b64ToJPGBytes(b64)
-			if jpegErr != nil {
-				log.Println("Error converting b64 to jpeg bytes: err=", jpegErr)
-				return jpegErr
+		_db := GetDB("master")
+
+		go func() {
+			// save jpg to fs
+			dbRootDir := filepath.Dir(_db.Path())
+			catsnapsDir := filepath.Join(dbRootDir, "catsnaps")
+			os.MkdirAll(catsnapsDir, 0755)
+			imagePath := filepath.Join(catsnapsDir, k+".jpg")
+			if e := os.WriteFile(imagePath, jpegBytes, 0644); e != nil {
+				log.Println("Error writing catsnap to fs: err=", e)
+				err = e
 			}
+		}()
+		if os.Getenv("AWS_BUCKETNAME") != "" {
 			go func() {
-				// save jpg to fs
-				dbRootDir := filepath.Dir(_db.Path())
-				catsnapsDir := filepath.Join(dbRootDir, "catsnaps")
-				os.MkdirAll(catsnapsDir, 0755)
-				imagePath := filepath.Join(catsnapsDir, k+".jpg")
-				if e := os.WriteFile(imagePath, jpegBytes, 0644); e != nil {
-					log.Println("Error writing catsnap to fs: err=", e)
+				if e := storeImageS3(k, jpegBytes); e != nil {
 					err = e
 				}
 			}()
-			if os.Getenv("AWS_BUCKETNAME") != "" {
-				go func() {
-					if e := storeImageS3(k, jpegBytes); e != nil {
-						err = e
-					}
-				}()
-			}
+		}
+
+		err = _db.Update(func(tx *bolt.Tx) error {
+
+			// trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
+			// if err != nil {
+			// 	return err
+			// }
+			//
+			// if exists := trackBucket.Get(tpBoltKey); exists != nil {
+			// 	// make sure same cat
+			// 	var existingTrackpoint trackPoint.TrackPoint
+			// 	e := json.Unmarshal(exists, &existingTrackpoint)
+			// 	if e != nil {
+			// 		fmt.Println("Checking on an existing trackpoint and got an error with one of the existing trackpoints unmarshaling.")
+			// 		return fmt.Errorf("unmarshal error: %v", e)
+			// 	}
+			// 	// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
+			// 	if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
+			// 		fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
+			// 		return errDuplicatePoint
+			// 	}
+			// }
 
 			snapBuck, err := tx.CreateBucketIfNotExists([]byte(catsnapsKey))
 			if err != nil {
@@ -1483,44 +1492,45 @@ func storePoint(tp *trackPoint.TrackPoint) (note.NoteVisit, error) {
 				return err
 			}
 			log.Println("Saved catsnap: ", tp)
-		}
 
-		// trackPointJSON, e := json.Marshal(tp)
-		// if e != nil {
-		// 	log.Println("Error marshaling trackpoint JSON: err=", e)
-		// 	err = e
-		// 	return err
-		// }
-		// e = trackBucket.Put(tpBoltKey, trackPointJSON)
-		// if e != nil {
-		// 	log.Println("Error storing trackpoint: err=", e)
-		// 	err = e
-		// 	return err
-		// }
-		// fmt.Println("Saved trackpoint: ", tp)
+			// trackPointJSON, e := json.Marshal(tp)
+			// if e != nil {
+			// 	log.Println("Error marshaling trackpoint JSON: err=", e)
+			// 	err = e
+			// 	return err
+			// }
+			// e = trackBucket.Put(tpBoltKey, trackPointJSON)
+			// if e != nil {
+			// 	log.Println("Error storing trackpoint: err=", e)
+			// 	err = e
+			// 	return err
+			// }
+			// fmt.Println("Saved trackpoint: ", tp)
 
-		// if ns.HasValidVisit() {
-		// 	visit, err = ns.Visit.AsVisit()
-		// 	if err != nil {
-		// 		return fmt.Errorf("as visit err: %v", err)
-		// 	}
-		// 	visit.Uuid = tp.Uuid
-		// 	visit.Name = tp.Name
-		// 	visit.PlaceParsed = visit.Place.MustAsPlace()
-		// 	visit.ReportedTime = tp.Time
-		// 	visit.Duration = visit.GetDuration()
-		// 	err = storeVisit(tx, tpBoltKey, visit)
-		// 	if err != nil {
-		// 		return fmt.Errorf("storing visit err: %v", err)
-		// 	}
-		// }
+			// if ns.HasValidVisit() {
+			// 	visit, err = ns.Visit.AsVisit()
+			// 	if err != nil {
+			// 		return fmt.Errorf("as visit err: %v", err)
+			// 	}
+			// 	visit.Uuid = tp.Uuid
+			// 	visit.Name = tp.Name
+			// 	visit.PlaceParsed = visit.Place.MustAsPlace()
+			// 	visit.ReportedTime = tp.Time
+			// 	visit.Duration = visit.GetDuration()
+			// 	err = storeVisit(tx, tpBoltKey, visit)
+			// 	if err != nil {
+			// 		return fmt.Errorf("storing visit err: %v", err)
+			// 	}
+			// }
 
-		return err
-	})
+			return err
+		})
+	}
+
 	if err != nil {
 		log.Println(err)
 	}
-	return visit, err
+	return err
 }
 
 func b64ToJPGBytes(b64 string) ([]byte, error) {
