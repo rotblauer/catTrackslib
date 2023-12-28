@@ -25,6 +25,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -43,6 +44,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	catnames "github.com/rotblauer/cattracks-names"
 )
 
 func init() {
@@ -992,6 +994,84 @@ func toFixed(num float64, precision int) float64 {
 	return float64(round(num*output)) / output
 }
 
+// TrackToFeature2 (WIP/experimental) is a track->geojson function that uses reflection to
+// transfer fields. This might be useful for a more dynamic approach to geojson, but it's
+// probably better in the broader scheme to just swap trackpoints for geojson entirely, though
+// this would require coordinated changes between the client (cattracker) and server.
+func TrackToFeature2(tp *trackPoint.TrackPoint) *geojson.Feature {
+	if tp == nil {
+		return nil
+	}
+
+	// config
+	var timeFormat = time.RFC3339
+
+	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(tp.Lng), geojson.Coord(tp.Lat)})
+	props := make(map[string]interface{})
+
+	tpV := reflect.ValueOf(*tp)
+	typeOfS := tpV.Type()
+
+	stringSliceContains := func(s []string, e string) bool {
+		for _, a := range s {
+			if a == e {
+				return true
+			}
+		}
+		return false
+	}
+
+	skipTrackFields := []string{"Lat", "Lng", "PushToken", "Version", "COVerified", "RemoteAddr", "Notes"}
+
+	for i := 0; i < tpV.NumField(); i++ {
+		fieldName := typeOfS.Field(i).Name
+		if stringSliceContains(skipTrackFields, fieldName) {
+			continue
+		}
+		switch t := tpV.Field(i).Interface().(type) {
+		case time.Time:
+			props[typeOfS.Field(i).Name] = t.Format(timeFormat)
+		case float64:
+			props[typeOfS.Field(i).Name] = toFixed(t, 2)
+		case string:
+			if t != "" {
+				props[typeOfS.Field(i).Name] = t
+			}
+		default:
+			props[typeOfS.Field(i).Name] = tpV.Field(i).Interface()
+		}
+	}
+
+	if ns, e := note.NotesField(tp.Notes).AsNoteStructured(); e == nil {
+		tpN := reflect.ValueOf(ns)
+		typeOfN := tpN.Type()
+
+		if ns.HasValidVisit() {
+			props["Visit"] = ns.Visit
+		}
+		skipNoteFields := []string{"Visit", "NetworkInfo"}
+		for i := 0; i < tpN.NumField(); i++ {
+			if stringSliceContains(skipNoteFields, typeOfN.Field(i).Name) {
+				continue
+			}
+			switch t := tpN.Field(i).Interface().(type) {
+			case time.Time:
+				props[typeOfN.Field(i).Name] = t.Format(timeFormat)
+			case float64:
+				props[typeOfN.Field(i).Name] = toFixed(t, 2)
+			case string:
+				if t != "" {
+					props[typeOfN.Field(i).Name] = t
+				}
+			default:
+				props[typeOfN.Field(i).Name] = tpN.Field(i).Interface()
+			}
+		}
+	}
+
+	return geojson.NewFeature(p, props, 1)
+}
+
 func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	// convert to a feature
 	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(trackPointCurrent.Lng), geojson.Coord(trackPointCurrent.Lat)})
@@ -1019,6 +1099,11 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 
 	if ns, e := note.NotesField(trackPointCurrent.Notes).AsNoteStructured(); e == nil {
 		props["Activity"] = ns.Activity
+
+		if v := ns.ActivityConfidence; v != nil {
+			props["ActivityConfidence"] = *v
+		}
+
 		props["Pressure"] = toFixed(ns.Pressure, 2)
 		if ns.CustomNote != "" {
 			props["Notes"] = ns.CustomNote
@@ -1065,6 +1150,43 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 		}
 		if ns.Distance > 0 {
 			props["Distance"] = toFixed(ns.Distance, 2)
+		}
+
+		if ns.Lightmeter > 0 {
+			props["Lightmeter"] = toFixed(ns.Lightmeter, 2)
+		}
+		if ns.AmbientTemp > 0 {
+			props["AmbientTemp"] = toFixed(ns.AmbientTemp, 2)
+		}
+		if ns.Humidity > 0 {
+			props["Humidity"] = toFixed(ns.Humidity, 2)
+		}
+		if v := ns.Accelerometer.X; v != nil {
+			props["AccelerometerX"] = *v
+		}
+		if v := ns.Accelerometer.Y; v != nil {
+			props["AccelerometerY"] = *v
+		}
+		if v := ns.Accelerometer.Z; v != nil {
+			props["AccelerometerZ"] = *v
+		}
+		if v := ns.UserAccelerometer.X; v != nil {
+			props["UserAccelerometerX"] = *v
+		}
+		if v := ns.UserAccelerometer.Y; v != nil {
+			props["UserAccelerometerY"] = *v
+		}
+		if v := ns.UserAccelerometer.Z; v != nil {
+			props["UserAccelerometerZ"] = *v
+		}
+		if v := ns.Gyroscope.X; v != nil {
+			props["GyroscopeX"] = *v
+		}
+		if v := ns.Gyroscope.Y; v != nil {
+			props["GyroscopeY"] = *v
+		}
+		if v := ns.Gyroscope.Z; v != nil {
+			props["GyroscopeZ"] = *v
 		}
 
 		// if trackPointCurrent.HeartRate == 0 && ns.HeartRateType != "" {
@@ -1382,41 +1504,7 @@ func storePoint(tp *trackPoint.TrackPoint) error {
 		// decode base64 -> image
 		// define 'key' for s3 upload
 		b64 := ns.ImgB64
-		sanitizeName := func(s string) string {
-			s = strings.ReplaceAll(s, " ", "_")
-			s = strings.ReplaceAll(s, "/", "_")
-			s = strings.ReplaceAll(s, "\\", "_")
-			s = strings.ReplaceAll(s, ":", "_")
-			s = strings.ReplaceAll(s, ";", "_")
-			s = strings.ReplaceAll(s, ",", "_")
-			s = strings.ReplaceAll(s, ".", "_")
-			s = strings.ReplaceAll(s, "?", "_")
-			s = strings.ReplaceAll(s, "!", "_")
-			s = strings.ReplaceAll(s, "@", "_")
-			s = strings.ReplaceAll(s, "#", "_")
-			s = strings.ReplaceAll(s, "$", "_")
-			s = strings.ReplaceAll(s, "%", "_")
-			s = strings.ReplaceAll(s, "^", "_")
-			s = strings.ReplaceAll(s, "&", "_")
-			s = strings.ReplaceAll(s, "*", "_")
-			s = strings.ReplaceAll(s, "(", "_")
-			s = strings.ReplaceAll(s, ")", "_")
-			s = strings.ReplaceAll(s, "+", "_")
-			s = strings.ReplaceAll(s, "=", "_")
-			s = strings.ReplaceAll(s, "~", "_")
-			s = strings.ReplaceAll(s, "`", "_")
-			s = strings.ReplaceAll(s, "[", "_")
-			s = strings.ReplaceAll(s, "]", "_")
-			s = strings.ReplaceAll(s, "{", "_")
-			s = strings.ReplaceAll(s, "}", "_")
-			s = strings.ReplaceAll(s, "<", "_")
-			s = strings.ReplaceAll(s, ">", "_")
-			s = strings.ReplaceAll(s, "|", "_")
-			s = strings.ReplaceAll(s, "\"", "_")
-			s = strings.ReplaceAll(s, "'", "_")
-			return s
-		}
-		k := fmt.Sprintf("%s_%s_%d", sanitizeName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
+		k := fmt.Sprintf("%s_%s_%d", catnames.AliasOrSanitizedName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
 		if os.Getenv("AWS_BUCKETNAME") != "" {
 			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
 		} else {
