@@ -12,12 +12,6 @@ type Route struct {
 type Routes []Route
 
 var routes = Routes{
-	// Route{
-	// 	"Index",
-	// 	"GET",
-	// 	"/",
-	// 	getIndexTemplate,
-	// },
 	Route{
 		"PointPopulator",
 		"POST",
@@ -25,23 +19,41 @@ var routes = Routes{
 		populatePoints,
 	},
 	Route{
-		"UploadCSV",
-		"POST",
-		"/upload",
-		uploadCSV,
+		"CatsLastKnown",
+		"GET",
+		"/lastknown",
+		getLastKnown,
 	},
 	Route{
-		"getPointsJSON",
+		"GetCatSnaps",
 		"GET",
-		"/api/data/{version}",
-		getPointsJSON,
+		"/catsnaps",
+		handleGetCatSnaps,
 	},
-	Route{
-		"WS",
-		"GET",
-		"/api/ws",
-		socket,
-	},
+	// Route{
+	// 	"Index",
+	// 	"GET",
+	// 	"/",
+	// 	getIndexTemplate,
+	// },
+	// Route{
+	// 	"UploadCSV",
+	// 	"POST",
+	// 	"/upload",
+	// 	uploadCSV,
+	// },
+	// Route{
+	// 	"getPointsJSON",
+	// 	"GET",
+	// 	"/api/data/{version}",
+	// 	getPointsJSON,
+	// },
+	// Route{
+	// 	"WS",
+	// 	"GET",
+	// 	"/api/ws",
+	// 	socket,
+	// },
 	// Route{
 	// 	"Map",
 	// 	"GET",
@@ -60,52 +72,41 @@ var routes = Routes{
 	// 	"/race",
 	// 	getRaceTemplate,
 	// },
-	Route{
-		"RaceJSON",
-		"GET",
-		"/api/race",
-		getRaceJSON,
-	},
-	Route{
-		"StatsJSON",
-		"GET",
-		"/stats",
-		getStatsJSON,
-	},
-	Route{
-		"CatsLastKnown",
-		"GET",
-		"/lastknown",
-		getLastKnown,
-	},
-	Route{
-		"Metadata",
-		"GET",
-		"/metadata",
-		getMetaData,
-	},
-	Route{
-		"GetVisits",
-		"GET",
-		"/visits",
-		handleGetPlaces,
-	},
-	Route{
-		"GetVisits2",
-		"GET",
-		"/visits2",
-		handleGetPlaces2,
-	},
-	Route{
-		"GetVisitPhotos",
-		"GET",
-		"/googleNearbyPhotos",
-		handleGetGoogleNearbyPhotos,
-	},
-	Route{
-		"GetCatSnaps",
-		"GET",
-		"/catsnaps",
-		handleGetCatSnaps,
-	},
+	// Route{
+	// 	"RaceJSON",
+	// 	"GET",
+	// 	"/api/race",
+	// 	getRaceJSON,
+	// },
+	// Route{
+	// 	"StatsJSON",
+	// 	"GET",
+	// 	"/stats",
+	// 	getStatsJSON,
+	// },
+	// Route{
+	// 	"Metadata",
+	// 	"GET",
+	// 	"/metadata",
+	// 	getMetaData,
+	// },
+	// Route{
+	// 	"GetVisits",
+	// 	"GET",
+	// 	"/visits",
+	// 	handleGetPlaces,
+	// },
+	// Route{
+	// 	"GetVisits2",
+	// 	"GET",
+	// 	"/visits2",
+	// 	handleGetPlaces2,
+	// },
+	// Route{
+	// 	"GetVisitPhotos",
+	// 	"GET",
+	// 	"/googleNearbyPhotos",
+	// 	handleGetGoogleNearbyPhotos,
+	// },
+
 }
