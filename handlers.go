@@ -261,24 +261,25 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 
 	var trackPoints trackPoint.TrackPoints
 
-	var bod []byte
+	var body []byte
 	var err error
-	if forwardPopulate != "" {
-		bod, err = ioutil.ReadAll(r.Body)
-		// bod := []byte{}
-		// n, err :=
-		if err != nil {
-			log.Println("err reading body", err)
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		// log.Println("read body ok, read nbytes=", len(bod))
-		log.Println("read body ok, read nbytes=", len(bod))
-		// log.Println("bod=", string(bod))
-		// And now set a new body, which will simulate the same data we read:
-		// > https://stackoverflow.com/questions/43021058/golang-read-request-body#43021236
-		r.Body = ioutil.NopCloser(bytes.NewBuffer(bod))
-	}
+
+	// if forwardPopulate != "" {
+	// 	body, err = ioutil.ReadAll(r.Body)
+	// 	// body := []byte{}
+	// 	// n, err :=
+	// 	if err != nil {
+	// 		log.Println("err reading body", err)
+	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// 		return
+	// 	}
+	// 	// log.Println("read body ok, read nbytes=", len(body))
+	// 	log.Println("read body ok, read nbytes=", len(body))
+	// 	// log.Println("body=", string(body))
+	// 	// And now set a new body, which will simulate the same data we read:
+	// 	// > https://stackoverflow.com/questions/43021058/golang-read-request-body#43021236
+	// 	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
+	// }
 
 	if r.Body == nil {
 		log.Println("error: body nil")
@@ -286,7 +287,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bod, err = ioutil.ReadAll(r.Body)
+	body, err = ioutil.ReadAll(r.Body)
 	if err != nil {
 		log.Println("error reading body", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -294,13 +295,13 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var ndbod []byte
-	err = json.Unmarshal(bod, &trackPoints)
-	// err = json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(bod))).Decode(&trackPoints)
+	err = json.Unmarshal(body, &trackPoints)
+	// err = json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(body))).Decode(&trackPoints)
 	if err != nil {
-		log.Println("Could not decode json as array, body length was:", len(bod))
+		log.Println("Could not decode json as array, body length was:", len(body))
 
 		// try decoding as ndjson..
-		ndbod = toJSONbuffer(ioutil.NopCloser(bytes.NewBuffer(bod)))
+		ndbod = toJSONbuffer(ioutil.NopCloser(bytes.NewBuffer(body)))
 
 		log.Println("attempting decode as ndjson instead..., length:", len(ndbod), string(ndbod))
 
@@ -309,7 +310,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Println("could not decode req as ndjson, error:", err.Error())
 
-			// err = json.Unmarshal(json.RawMessage(bod), &trackPoints)
+			// err = json.Unmarshal(json.RawMessage(body), &trackPoints)
 
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
@@ -322,7 +323,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		// maybe we accidentally unmarshalled geosjon points as trackpoints
 		// try to unmarshal as geojson
 		gjfc := []geojson.Feature{}
-		by := bod
+		by := body
 		if ndbod != nil {
 			by = ndbod
 		}
@@ -412,10 +413,10 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	// goroutine keeps this request from block while pending this outgoing request
 	// this keeps an original POST from being dependent on a forward POST
 	go func() {
-		if err := handleForwardPopulate(r, bod); err != nil {
+		if err := handleForwardPopulate(r, body); err != nil {
 			log.Println("forward populate error: ", err)
 			// this just to persist any request that fails in case this process is terminated (backlogs are stored in mem)
-			ioutil.WriteFile(fmt.Sprintf("dfp-%d", time.Now().UnixNano()), bod, 0666)
+			ioutil.WriteFile(fmt.Sprintf("dfp-%d", time.Now().UnixNano()), body, 0666)
 		} else {
 			log.Println("forward populate finished OK")
 		}
