@@ -346,8 +346,6 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	trackPoints.Verified()
-
 	// log.Println("checking token")
 	// tok := os.Getenv("COTOKEN")
 	// if tok == "" {
