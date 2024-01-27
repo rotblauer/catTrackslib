@@ -7,8 +7,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	// "html/template"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -287,7 +285,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	body, err = ioutil.ReadAll(r.Body)
+	body, err = io.ReadAll(r.Body)
 	if err != nil {
 		log.Println("error reading body", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -301,7 +299,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		log.Println("Could not decode json as array, body length was:", len(body))
 
 		// try decoding as ndjson..
-		ndbod = toJSONbuffer(ioutil.NopCloser(bytes.NewBuffer(body)))
+		ndbod = toJSONbuffer(io.NopCloser(bytes.NewBuffer(body)))
 
 		log.Println("attempting decode as ndjson instead..., length:", len(ndbod), string(ndbod))
 
@@ -416,7 +414,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		if err := handleForwardPopulate(r, body); err != nil {
 			log.Println("forward populate error: ", err)
 			// this just to persist any request that fails in case this process is terminated (backlogs are stored in mem)
-			ioutil.WriteFile(fmt.Sprintf("dfp-%d", time.Now().UnixNano()), body, 0666)
+			os.WriteFile(fmt.Sprintf("dfp-%d", time.Now().UnixNano()), body, 0666)
 		} else {
 			log.Println("forward populate finished OK")
 		}
