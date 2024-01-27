@@ -3,9 +3,12 @@ package catTrackslib
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/gorilla/mux"
 )
+
+// https://github.com/gorilla/mux#middleware
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +29,56 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// // Define our struct
+// type authenticationMiddleware struct {
+// 	tokenUsers map[string]string
+// }
+//
+// // Middleware function, which will be called for each request
+// func (amw *authenticationMiddleware) Middleware(next http.Handler) http.Handler {
+// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+// 		token := r.Header.Get("X-Session-Token")
+//
+// 		if user, found := amw.tokenUsers[token]; found {
+// 			// We found the token in our map
+// 			log.Printf("Authenticated user %s\n", user)
+// 			// Pass down the request to the next middleware (or final handler)
+// 			next.ServeHTTP(w, r)
+// 		} else {
+// 			// Write an error and stop the handler chain
+// 			http.Error(w, "Forbidden", http.StatusForbidden)
+// 		}
+// 	})
+// }
+
+func tokenAuthenticationMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		validToken := os.Getenv("COTOKEN")
+		if validToken == "" {
+			log.Printf("No COTOKEN set, allowing all requests")
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		token := r.Header.Get("AuthorizationOfCats")
+		if token == "" {
+			// Header token not set. Check alternate protocol, which is using a query param with the name api_token.
+			// eg. catonmap.info:3001/populate/?api_token=asdfasdfb
+			r.ParseForm()
+			token = r.FormValue("api_token")
+		}
+
+		// Enforce token validation.
+		if token != validToken {
+			http.Error(w, "Forbidden", http.StatusForbidden)
+			return
+		}
+
+		// Pass down the request to the next middleware (or final handler)
+		next.ServeHTTP(w, r)
+	})
+}
+
 func NewRouter() *mux.Router {
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -34,7 +87,10 @@ func NewRouter() *mux.Router {
 	apiRoutes := router.NewRoute().Subrouter()
 	apiRoutes.Use(corsMiddleware)
 
-	apiRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
+	tokenAuthenticatedRoutes := apiRoutes.NewRoute().Subrouter()
+	tokenAuthenticatedRoutes.Use(tokenAuthenticationMiddleware)
+
+	tokenAuthenticatedRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
 	apiRoutes.Methods(http.MethodGet).Path("/lastknown").HandlerFunc(getLastKnown)
 	apiRoutes.Methods(http.MethodGet).Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
 

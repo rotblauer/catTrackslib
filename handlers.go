@@ -346,48 +346,49 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	log.Println("checking token")
-	tok := os.Getenv("COTOKEN")
-	if tok == "" {
-		log.Println("ERROR: no COTOKEN env var set")
-	} else {
-		log.Println("GOODNEWS: using COTOKEN for cat verification")
-		// log.Println()
-		// if b, _ := httputil.DumpRequest(r, true); b != nil {
-		// 	log.Println(string(b))
-		// }
-		// log.Println()
-		verified := false
-		headerKey := "AuthorizationOfCats"
-		if h := r.Header.Get(headerKey); h != "" {
-			log.Println("using header verification...")
-			if h == tok {
-				log.Println("header OK")
-				verified = true
-			} else {
-				log.Println("header verification failed: ", h)
-			}
-		} else {
-			// catonmap.info:3001/populate?api_token=asdfasdfb
-			r.ParseForm()
-			if token := r.FormValue("api_token"); token != "" {
-				if token == tok {
-					log.Println("used token verification: OK")
-					verified = true
-				} else {
-					log.Println("token verification failed:", token)
-					verified = true
-				}
-			}
-		}
-		if verified {
-			trackPoints.Verified()
-			log.Println("GOODNEWS: verified cattracks posted remote.host:", r.RemoteAddr)
-		} else {
-			trackPoints.Unverified(r)
-			log.Println("WARNING: unverified cattracks posted remote.host:", r.RemoteAddr)
-		}
-	}
+	trackPoints.Verified()
+
+	// log.Println("checking token")
+	// tok := os.Getenv("COTOKEN")
+	// if tok == "" {
+	// 	log.Println("ERROR: no COTOKEN env var set")
+	// } else {
+	// 	log.Println("GOODNEWS: using COTOKEN for cat verification")
+	// 	// log.Println()
+	// 	// if b, _ := httputil.DumpRequest(r, true); b != nil {
+	// 	// 	log.Println(string(b))
+	// 	// }
+	// 	// log.Println()
+	// 	verified := false
+	// 	headerKey := "AuthorizationOfCats"
+	// 	if h := r.Header.Get(headerKey); h != "" {
+	// 		log.Println("using header verification...")
+	// 		if h == tok {
+	// 			log.Println("header OK")
+	// 			verified = true
+	// 		} else {
+	// 			log.Println("header verification failed: ", h)
+	// 		}
+	// 	} else {
+	// 		// catonmap.info:3001/populate?api_token=asdfasdfb
+	// 		r.ParseForm()
+	// 		if token := r.FormValue("api_token"); token != "" {
+	// 			if token == tok {
+	// 				log.Println("used token verification: OK")
+	// 				verified = true
+	// 			} else {
+	// 				log.Println("token verification failed:", token)
+	// 				verified = true
+	// 			}
+	// 		}
+	// 	}
+	// 	if verified {
+	// 		log.Println("GOODNEWS: verified cattracks posted remote.host:", r.RemoteAddr)
+	// 	} else {
+	// 		trackPoints.Unverified(r)
+	// 		log.Println("WARNING: unverified cattracks posted remote.host:", r.RemoteAddr)
+	// 	}
+	// }
 
 	// goroutine keeps http req from blocking while points are processed
 	go func() {
