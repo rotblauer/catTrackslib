@@ -9,17 +9,11 @@ import (
 func NewRouter() *mux.Router {
 
 	router := mux.NewRouter().StrictSlash(true)
-	for _, route := range routes {
-		var handler http.Handler
 
-		handler = route.HandlerFunc
+	router.Methods("POST").Path("/populate/").HandlerFunc(populatePoints)
+	router.Methods("GET").Path("/lastknown").HandlerFunc(getLastKnown)
+	router.Methods("GET").Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
 
-		router.
-			Methods(route.Method).
-			Path(route.Pattern).
-			Name(route.Name).
-			Handler(handler)
-	}
 	// File server merveres
 	ass := http.StripPrefix("/ass/", http.FileServer(http.Dir("./ass/")))
 	router.PathPrefix("/ass/").Handler(ass)
