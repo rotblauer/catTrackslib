@@ -256,9 +256,6 @@ func toJSONbuffer(reader io.Reader) []byte {
 }
 
 func populatePoints(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-	w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
-
 	dump, _ := httputil.DumpRequest(r, false)
 	log.Println("/populate/:", string(dump))
 
@@ -557,7 +554,6 @@ func uploadCSV(w http.ResponseWriter, r *http.Request) {
 }
 
 func getLastKnown(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
 	b, e := getLastKnownData()
 	// b, e := json.Marshal(lastKnownMap)
 	if e != nil {
@@ -690,7 +686,6 @@ func handleGetPlaces2(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleGetCatSnaps(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
 	var startQ, endQ time.Time
 	startRaw, ok := r.URL.Query()["tstart"]
 	if ok && len(startRaw) > 0 {

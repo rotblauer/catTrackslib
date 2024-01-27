@@ -10,9 +10,18 @@ func NewRouter() *mux.Router {
 
 	router := mux.NewRouter().StrictSlash(true)
 
-	router.Methods("POST").Path("/populate/").HandlerFunc(populatePoints)
-	router.Methods("GET").Path("/lastknown").HandlerFunc(getLastKnown)
-	router.Methods("GET").Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
+	middleWarePermissiveCORS := http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, Authorization")
+
+	})
+
+	router.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints).
+		HandlerFunc(middleWarePermissiveCORS)
+	router.Methods(http.MethodGet).Path("/lastknown").HandlerFunc(getLastKnown).
+		HandlerFunc(middleWarePermissiveCORS)
+	router.Methods(http.MethodGet).Path("/catsnaps").HandlerFunc(handleGetCatSnaps).
+		HandlerFunc(middleWarePermissiveCORS)
 
 	// File server merveres
 	ass := http.StripPrefix("/ass/", http.FileServer(http.Dir("./ass/")))
