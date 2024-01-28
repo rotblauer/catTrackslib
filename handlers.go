@@ -750,26 +750,10 @@ func handleGetCatSnaps(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, e.Error(), http.StatusInternalServerError)
 	}
 
-	var bs []byte
-
-	_, gj := r.URL.Query()["geojson"]
-	if gj {
-		features := []*geojson.Feature{}
-		for _, sp := range snapPoints {
-			feature := TrackToFeature(sp)
-			features = append(features, feature)
-		}
-
-		fc := geojson.NewFeatureCollection()
-		fc.Features = features
-		bs, e = json.Marshal(fc)
-	} else {
-		bs, e = json.Marshal(snapPoints)
-	}
-
-	if e != nil {
-		log.Println(e)
-		http.Error(w, e.Error(), http.StatusInternalServerError)
+	bs, err := json.Marshal(snapPoints)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
 	fmt.Println("Got catsnaps", len(snapPoints), "snaps", len(bs), "bytes")
