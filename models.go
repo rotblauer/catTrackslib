@@ -1116,7 +1116,7 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	props["Time"] = trackPointCurrent.Time
 	props["UnixTime"] = trackPointCurrent.Time.Unix()
 	props["Version"] = trackPointCurrent.Version
-	props["Speed"] = trackPointCurrent.Speed
+	props["Speed"] = toFixed(trackPointCurrent.Speed, 3)
 	props["Elevation"] = toFixed(trackPointCurrent.Elevation, 2)
 	props["Heading"] = toFixed(trackPointCurrent.Heading, 1)
 	props["Accuracy"] = toFixed(trackPointCurrent.Accuracy, 2)
