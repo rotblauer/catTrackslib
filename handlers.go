@@ -17,7 +17,6 @@ import (
 	"github.com/gorilla/schema"
 	"github.com/paulmach/orb/geojson"
 
-	note "github.com/rotblauer/catnotelib"
 	"github.com/rotblauer/trackpoints/trackPoint"
 	// "os"
 	// "path"
@@ -290,8 +289,6 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	dump, _ := httputil.DumpRequest(r, false)
 	log.Println("/populate/:", string(dump))
 
-	var trackPoints trackPoint.TrackPoints
-
 	var body []byte
 	var err error
 
@@ -436,7 +433,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 			// http.Error(w, errS.Error(), http.StatusInternalServerError)
 			return
 		}
-		log.Println("stored trackpoints", "len:", trackPoints.Len())
+		log.Println("stored features", "len:", len(features))
 	}()
 
 	// return empty json of empty trackpoints to not have to download tons of shit
@@ -458,92 +455,6 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 			log.Println("forward populate finished OK")
 		}
 	}()
-
-	// "visit":"{\"validVisit\":false}"
-	for _, t := range trackPoints {
-		ns, e := note.NotesField(t.Notes).AsNoteStructured()
-		if e != nil {
-			continue
-
-		}
-		if !ns.HasValidVisit() {
-			continue
-		}
-		vis, err := ns.Visit.AsVisit()
-		if err != nil {
-			log.Println("error unmarshalling visit", err)
-			continue
-		}
-
-		place, err := vis.Place.AsPlace()
-		if err != nil {
-			log.Println("error parsing place", err)
-			continue
-		}
-
-		mago := int(time.Now().Sub(vis.ArrivalTime).Round(time.Minute).Minutes())
-		magoIFTTTword := fmt.Sprintf("%d minutes ago", mago)
-		if mago == 1 {
-			magoIFTTTword = fmt.Sprintf("%d minute ago", mago)
-		} else if mago == 0 {
-			magoIFTTTword = "Now"
-		}
-
-		info := IftttBodyCatVisit{
-			Value1: fmt.Sprintf(`%s visited %s
-
-%s
-%s
-
-http://catonmap.net?z=%d&x=%.14f&y=%.14f&t=tile-dark&l=recent
-`, t.Name, place.Identity, place.Identity, place.Address, 14, place.Lat, place.Lng),
-			// April 29, 2013 at 12:01PM <-- ifttt (output fmt), unknown fmt for input
-			// Mon Jan 02 15:04:05 -0700 2006 <-- go std templater
-			// start date
-			Value2: magoIFTTTword, // vis.ArrivalTime.Format("January _2, 2006") + " at " + vis.ArrivalTime.Format(time.Kitchen),
-			Value3: int(vis.GetDuration().Round(time.Minute).Minutes()),
-		}
-
-		b, e := json.Marshal(info)
-		if e != nil {
-			log.Println("err marshal visit hooker", e)
-			return
-		}
-		log.Println("sending ifttt webhook", "url=", iftttWebhoook, "info=", info)
-		go func() {
-			res, err := http.Post(iftttWebhoook, "application/json", bytes.NewBuffer(b))
-			if err != nil {
-				log.Println("err posting webhook", err)
-				return
-			}
-			log.Println("webhook posted", "res", res.Status)
-		}()
-		// go func() {
-		// 	catmapurl := fmt.Sprintf("http://catonmap.net?z=%d&x=%.14f&y=%.14f", 14, place.Lat, place.Lng)
-		// 	p := struct {
-		// 		Value1 string `json:"value1"`
-		// 		Value2 string `json:"value2"`
-		// 		Value3 string `json:"value3"`
-		// 	}{
-		// 		Value1: t.Name,
-		// 		Value2: place.Identity,
-		// 		// Value3:
-		// 	}
-		// 	b, e := json.Marshal(b)
-		// 	if e != nil {
-		// 		log.Println("err marshalling isaac cat track hook", err)
-		// 		return
-		// 	}
-		// 	url := strings.Replace(iftttWebhoook, "any_cat_visit", "cat_visit_ia_twitter", -1)
-		// 	log.Println("sending ifttt webhook @isaac", "url=", url, "info=", p)
-		// 	res, err := http.Post(url, "application/json", bytes.NewBuffer(b))
-		// 	if err != nil {
-		// 		log.Println("err posting webhook", err)
-		// 		return
-		// 	}
-		// 	log.Println("webhook posted", "res", res.Status)
-		// }()
-	}
 }
 
 // func uploadCSV(w http.ResponseWriter, r *http.Request) {
