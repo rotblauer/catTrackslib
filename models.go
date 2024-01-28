@@ -1117,9 +1117,9 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	props["UnixTime"] = trackPointCurrent.Time.Unix()
 	props["Version"] = trackPointCurrent.Version
 	props["Speed"] = trackPointCurrent.Speed
-	props["Elevation"] = trackPointCurrent.Elevation
-	props["Heading"] = trackPointCurrent.Heading
-	props["Accuracy"] = trackPointCurrent.Accuracy
+	props["Elevation"] = toFixed(trackPointCurrent.Elevation, 2)
+	props["Heading"] = toFixed(trackPointCurrent.Heading, 1)
+	props["Accuracy"] = toFixed(trackPointCurrent.Accuracy, 2)
 
 	if trackPointCurrent.VAccuracy > 0 {
 		props["vAccuracy"] = trackPointCurrent.VAccuracy
@@ -1228,7 +1228,7 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 			bs := note.BatteryStatus{}
 			if err := json.Unmarshal([]byte(v), &bs); err == nil {
 				props["BatteryStatus"] = bs.Status
-				props["BatteryLevel"] = bs.Level
+				props["BatteryLevel"] = toFixed(bs.Level, 2)
 			}
 		}
 		if v := ns.NetworkInfo; v != "" {
