@@ -1224,6 +1224,16 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 		if v := ns.Gyroscope.Z; v != nil {
 			props["GyroscopeZ"] = *v
 		}
+		if v := ns.BatteryStatus; v != "" {
+			bs := note.BatteryStatus{}
+			if err := json.Unmarshal([]byte(v), &bs); err == nil {
+				props["BatteryStatus"] = bs.Status
+				props["BatteryLevel"] = bs.Level
+			}
+		}
+		if v := ns.NetworkInfo; v != "" {
+			props["NetworkInfo"] = v
+		}
 
 		// if trackPointCurrent.HeartRate == 0 && ns.HeartRateType != "" {
 		// 	props["HeartRateType"] = ns.HeartRateType
