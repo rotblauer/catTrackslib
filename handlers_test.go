@@ -107,41 +107,58 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 		}
 	}
 
-	t.Log("ND GeoJSON")
-	ndGeoJSONFile := "testdata/trackpoints.nd.geojson"
-	ndData, err := os.ReadFile(ndGeoJSONFile)
-	if err != nil {
-		t.Fatal(err)
+	for _, f := range []string{
+		"testdata/trackpoints.json",
+		"testdata/trackpoints.geojson",
+		"testdata/trackpoints.featurecollection.geojson",
+		"testdata/trackpoints.nd.geojson",
+		"testdata/trackpoints.nd.json",
+	} {
+		t.Run(f, func(t *testing.T) {
+			data, err := os.ReadFile(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := decodeAnythingToGeoJSON(data)
+			validate(got, err)
+		})
 	}
-	got, err := decodeAnythingToGeoJSON(ndData)
-	validate(got, err)
 
-	t.Log("GeoJSON FeatureCollection")
-	geoJSONFCFile := "testdata/trackpoints.featurecollection.geojson"
-	geoJSONFCData, err := os.ReadFile(geoJSONFCFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err = decodeAnythingToGeoJSON(geoJSONFCData)
-	validate(got, err)
-
-	t.Log("GeoJSON array")
-	geoJSONFile := "testdata/trackpoints.geojson"
-	geoJSONData, err := os.ReadFile(geoJSONFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err = decodeAnythingToGeoJSON(geoJSONData)
-	validate(got, err)
-
-	t.Log("Trackpoint array")
-	trackpointsFile := "testdata/trackpoints.json"
-	trackpointData, err := os.ReadFile(trackpointsFile)
-	if err != nil {
-		t.Fatal(err)
-	}
-	got, err = decodeAnythingToGeoJSON(trackpointData)
-	validate(got, err)
-
-	// geoJSONFCFile := "testdata/trackpoints.geojson"
+	// t.Log("ND GeoJSON")
+	// ndGeoJSONFile := "testdata/trackpoints.nd.geojson"
+	// ndData, err := os.ReadFile(ndGeoJSONFile)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// got, err := decodeAnythingToGeoJSON(ndData)
+	// validate(got, err)
+	//
+	// t.Log("GeoJSON FeatureCollection")
+	// geoJSONFCFile := "testdata/trackpoints.featurecollection.geojson"
+	// geoJSONFCData, err := os.ReadFile(geoJSONFCFile)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// got, err = decodeAnythingToGeoJSON(geoJSONFCData)
+	// validate(got, err)
+	//
+	// t.Log("GeoJSON array")
+	// geoJSONFile := "testdata/trackpoints.geojson"
+	// geoJSONData, err := os.ReadFile(geoJSONFile)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// got, err = decodeAnythingToGeoJSON(geoJSONData)
+	// validate(got, err)
+	//
+	// t.Log("Trackpoint array")
+	// trackpointsFile := "testdata/trackpoints.json"
+	// trackpointData, err := os.ReadFile(trackpointsFile)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// got, err = decodeAnythingToGeoJSON(trackpointData)
+	// validate(got, err)
+	//
+	// // geoJSONFCFile := "testdata/trackpoints.geojson"
 }

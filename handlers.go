@@ -266,16 +266,29 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 		return gjfc.Features, nil
 	}
 
-	// try to decode as ndgeojson
+	// try to decode as trackpoints
 	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
+	trackPoints := trackPoint.TrackPoints{}
+	if err := json.Unmarshal(data, &trackPoints); err == nil {
+		for _, tp := range trackPoints {
+			gja = append(gja, TrackToFeature(tp))
+		}
+		return gja, nil
+	}
+
+	// try to decode as ndgeojson
 	arrayData := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
+
+	// geojson features
+	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 	if err := json.Unmarshal(arrayData, &gja); err == nil {
 		return gja, nil
 	}
 
-	// try to decode as trackpoints
-	trackPoints := trackPoint.TrackPoints{}
-	if err := json.Unmarshal(data, &trackPoints); err == nil {
+	// trackpoint features
+	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
+	trackPoints = trackPoint.TrackPoints{}
+	if err := json.Unmarshal(arrayData, &trackPoints); err == nil {
 		for _, tp := range trackPoints {
 			gja = append(gja, TrackToFeature(tp))
 		}
@@ -328,6 +341,8 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	log.Println("populating", len(features), "features")
 
 	// var ndbod []byte
 	// err = json.Unmarshal(body, &trackPoints)
@@ -511,32 +526,6 @@ func getLastKnown(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	fmt.Println("Got lastknown:", len(b), "bytes")
-
-	_, gj := r.URL.Query()["geojson"]
-	if gj {
-		// unmarshal to lastknown map
-		lk := LastKnown{}
-		e = json.Unmarshal(b, &lk)
-		if e != nil {
-			log.Println(e)
-			http.Error(w, e.Error(), http.StatusInternalServerError)
-			return
-		}
-		feats := []*geojson.Feature{}
-		for _, v := range lk {
-			feat := TrackToFeature(v)
-			feats = append(feats, feat)
-		}
-		fc := geojson.NewFeatureCollection()
-		fc.Features = feats
-		b, e = json.Marshal(fc)
-		if e != nil {
-			log.Println(e)
-			http.Error(w, e.Error(), http.StatusInternalServerError)
-			return
-		}
-	}
-
 	w.Write(b)
 }
 

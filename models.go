@@ -1482,15 +1482,20 @@ func storePoints(features []*geojson.Feature) error {
 // }
 
 func mustGetTime(f *geojson.Feature) time.Time {
-	timeStr, ok := f.Properties["Time"].(string)
-	if !ok {
-		timeStr = time.Now().Format(time.RFC3339)
+	if t, ok := f.Properties["Time"].(time.Time); ok {
+		return t
 	}
-	t, err := time.Parse(time.RFC3339, timeStr)
-	if err != nil {
-		return time.Now()
+
+	noTimeDefault := time.Unix(0, 0)
+
+	if timeStr, ok := f.Properties["Time"].(string); ok {
+		t, err := time.Parse(time.RFC3339, timeStr)
+		if err == nil {
+			return t
+		}
+		return noTimeDefault
 	}
-	return t
+	return noTimeDefault
 }
 
 func buildTrackpointKey(tp *geojson.Feature) []byte {
@@ -1551,8 +1556,8 @@ func validatePoint(tp *geojson.Feature) error {
 	if tp.Properties["Time"] == nil {
 		return fmt.Errorf("nil time")
 	}
-	if _, ok := tp.Properties["Time"].(string); !ok {
-		return fmt.Errorf("time not a string")
+	if _, ok := tp.Properties["Time"]; !ok {
+		return fmt.Errorf("missing field: Time")
 	}
 	return nil
 }
@@ -1564,14 +1569,7 @@ func storePoint(feat *geojson.Feature) error {
 		return err
 	}
 
-	tpTimeStr, ok := feat.Properties["Time"].(string)
-	if !ok || tpTimeStr == "" {
-		tpTimeStr = time.Now().Format(time.RFC3339)
-	}
-	tpTime, err := time.Parse(time.RFC3339, tpTimeStr)
-	if err != nil {
-		return err
-	}
+	tpTime := mustGetTime(feat)
 
 	pt, ok := feat.Geometry.(orb.Point)
 	if !ok {
