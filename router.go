@@ -101,10 +101,11 @@ func NewRouter() *mux.Router {
 	jsonMiddleware := contentTypeMiddlewareFor("application/json")
 	apiRoutes.Use(jsonMiddleware)
 
-	tokenAuthenticatedRoutes := apiRoutes.NewRoute().Subrouter()
-	tokenAuthenticatedRoutes.Use(tokenAuthenticationMiddleware)
+	authenticatedAPIRoutes := apiRoutes.NewRoute().Subrouter()
+	authenticatedAPIRoutes.Use(tokenAuthenticationMiddleware)
 
-	tokenAuthenticatedRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
+	authenticatedAPIRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
+	authenticatedAPIRoutes.Methods(http.MethodPost).Path("/populate").HandlerFunc(populatePoints)
 	apiRoutes.Methods(http.MethodGet).Path("/lastknown").HandlerFunc(getLastKnown)
 	apiRoutes.Methods(http.MethodGet).Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
 

@@ -268,7 +268,7 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	}
 
 	// try to decode as ndgeojson
-	gja = []*geojson.Feature{}
+	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 	arrayData := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
 	if err := json.Unmarshal(arrayData, &gja); err == nil {
 		return gja, nil
