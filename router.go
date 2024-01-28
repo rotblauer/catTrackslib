@@ -29,6 +29,17 @@ func corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func contentTypeMiddlewareFor(contentType string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Do stuff here
+			w.Header().Set("Content-Type", contentType)
+			// Call the next handler, which can be another middleware in the chain, or the final handler.
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
 // // Define our struct
 // type authenticationMiddleware struct {
 // 	tokenUsers map[string]string
@@ -86,6 +97,9 @@ func NewRouter() *mux.Router {
 
 	apiRoutes := router.NewRoute().Subrouter()
 	apiRoutes.Use(corsMiddleware)
+
+	jsonMiddleware := contentTypeMiddlewareFor("application/json")
+	apiRoutes.Use(jsonMiddleware)
 
 	tokenAuthenticatedRoutes := apiRoutes.NewRoute().Subrouter()
 	tokenAuthenticatedRoutes.Use(tokenAuthenticationMiddleware)

@@ -1,9 +1,13 @@
 package catTrackslib
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
 	"github.com/rotblauer/tileTester2/note"
 	"github.com/rotblauer/trackpoints/trackPoint"
 )
@@ -65,4 +69,79 @@ func TestTimeZeroing(t *testing.T) {
 
 	var tim2 time.Time
 	t.Log(tim2.IsZero())
+}
+
+func TestDecodeAnythingToGeoJSON(t *testing.T) {
+
+	validate := func(got []*geojson.Feature, err error) {
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		if len(got) != 10 {
+			t.Error("wrong length", len(got))
+		}
+		if got[0].Properties["Name"] != "tonga-moto-63b2" {
+			t.Error("wrong name")
+		}
+		if got[0].Geometry == nil {
+			t.Error("nil geometry")
+		} else {
+			if v, ok := got[0].Geometry.(orb.Point); !ok || v[0] != -111.6902394 {
+				t.Error("wrong lng", v[0])
+			}
+		}
+		if v, ok := got[0].Properties["Accuracy"].(float64); !ok || v != 7.4 {
+			t.Error("wrong accuracy", v)
+		}
+
+		for _, f := range got {
+			if err := validatePoint(f); err != nil {
+				t.Error(err)
+			}
+		}
+
+		if t.Failed() {
+			j, _ := json.MarshalIndent(got, "", "  ")
+			t.Log(string(j))
+		}
+	}
+
+	t.Log("ND GeoJSON")
+	ndGeoJSONFile := "testdata/trackpoints.nd.geojson"
+	ndData, err := os.ReadFile(ndGeoJSONFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := decodeAnythingToGeoJSON(ndData)
+	validate(got, err)
+
+	t.Log("GeoJSON FeatureCollection")
+	geoJSONFCFile := "testdata/trackpoints.featurecollection.geojson"
+	geoJSONFCData, err := os.ReadFile(geoJSONFCFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = decodeAnythingToGeoJSON(geoJSONFCData)
+	validate(got, err)
+
+	t.Log("GeoJSON array")
+	geoJSONFile := "testdata/trackpoints.geojson"
+	geoJSONData, err := os.ReadFile(geoJSONFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = decodeAnythingToGeoJSON(geoJSONData)
+	validate(got, err)
+
+	t.Log("Trackpoint array")
+	trackpointsFile := "testdata/trackpoints.json"
+	trackpointData, err := os.ReadFile(trackpointsFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err = decodeAnythingToGeoJSON(trackpointData)
+	validate(got, err)
+
+	// geoJSONFCFile := "testdata/trackpoints.geojson"
 }

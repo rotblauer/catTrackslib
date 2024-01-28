@@ -33,7 +33,8 @@ import (
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/groupcache/lru"
-	"github.com/kpawlik/geojson"
+	"github.com/paulmach/orb"
+	"github.com/paulmach/orb/geojson"
 	note "github.com/rotblauer/catnotelib"
 	"github.com/rotblauer/trackpoints/trackPoint"
 	bolt "go.etcd.io/bbolt"
@@ -65,6 +66,7 @@ func RandStringRunes(n int) string {
 }
 
 type LastKnown map[string]*trackPoint.TrackPoint
+type LastKnownGeoJSON map[string]*geojson.Feature
 type Metadata struct {
 	KeyN               int
 	KeyNUpdated        time.Time
@@ -883,14 +885,35 @@ func getLastKnownData() (out []byte, err error) {
 	err = GetDB("master").View(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(statsKey))
 		out = b.Get([]byte("lastknown"))
+
+		// // For backwards-compatibility with the API, which expects a map of catname->TRACKPOINTs,
+		// // we'll unmarshal this as a map:string::geojson.Features and then convert each entry to a trackpoint,
+		// // then remarshal that to json and return it (assign to out).
+		// lk := LastKnownGeoJSON{}
+		// if err := json.Unmarshal(out, &lk); err != nil {
+		// 	return err
+		// }
+		// lkOriginal := LastKnown{}
+		// for name, feature := range lk {
+		// 	track, err := FeatureToTrack(*feature)
+		// 	if err != nil {
+		// 		return err
+		// 	}
+		// 	lkOriginal[name] = &track
+		// }
+		// out, err = json.MarshalIndent(out, "", "  ")
+		// if err != nil {
+		// 	return err
+		// }
+
 		return nil
 	})
 	return
 }
 
-func storeLastKnown(tp *trackPoint.TrackPoint) {
-	// lastKnownMap[tp.Name] = tp
-	lk := LastKnown{}
+func storeLastKnown(feature *geojson.Feature) {
+	// lastKnownMap[feature.Name] = feature
+	lk := LastKnownGeoJSON{}
 	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
 		b, err := tx.CreateBucketIfNotExists([]byte(statsKey))
 		if err != nil {
@@ -898,22 +921,27 @@ func storeLastKnown(tp *trackPoint.TrackPoint) {
 		}
 
 		v := b.Get([]byte("lastknown"))
-		if e := json.Unmarshal(v, &lk); e != nil {
-			log.Println("error unmarshalling nil lastknown", tp)
-		}
-		lk[tp.Name] = tp
+
+		// Ignore the error b/c we used to store trackpoints, now using geosjon features.
+		// If this fails, we'll just create a new LastKnownGeoJSON map.
+		_ = json.Unmarshal(v, &lk)
+
+		// Assign the last-known feature to this cat.
+		lk[feature.Properties["Name"].(string)] = feature
+
+		// Marshal and write the whole map.
 		if by, e := json.Marshal(lk); e == nil {
 			if e := b.Put([]byte("lastknown"), by); e != nil {
 				return e
 			}
 		} else {
-			log.Println("err marshalling lastknown", tp)
+			log.Println("err marshalling lastknown", feature)
 		}
 		return nil
 	}); err != nil {
 		log.Printf("error storing last known: %v", err)
 	} else {
-		spewTP := spew.Sdump(tp)
+		spewTP := spew.Sdump(feature)
 		log.Printf("updated last known=%v\ncurrent=%s", lk, spewTP)
 	}
 }
@@ -1006,7 +1034,7 @@ func TrackToFeature2(tp *trackPoint.TrackPoint) *geojson.Feature {
 	// config
 	var timeFormat = time.RFC3339
 
-	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(tp.Lng), geojson.Coord(tp.Lat)})
+	p := geojson.NewFeature(orb.Point{tp.Lng, tp.Lat})
 	props := make(map[string]interface{})
 
 	tpV := reflect.ValueOf(*tp)
@@ -1069,15 +1097,20 @@ func TrackToFeature2(tp *trackPoint.TrackPoint) *geojson.Feature {
 		}
 	}
 
-	return geojson.NewFeature(p, props, 1)
+	p.Properties = props
+	return p
 }
 
 func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	// convert to a feature
-	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(trackPointCurrent.Lng), geojson.Coord(trackPointCurrent.Lat)})
+	// p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(trackPointCurrent.Lng), geojson.Coord(trackPointCurrent.Lat)})
+	p := geojson.NewFeature(orb.Point{trackPointCurrent.Lng, trackPointCurrent.Lat})
 
 	// currently need speed, name,time
 	props := make(map[string]interface{})
+	defer func() {
+		p.Properties = props
+	}()
 	props["UUID"] = trackPointCurrent.Uuid
 	props["Name"] = trackPointCurrent.Name
 	props["Time"] = trackPointCurrent.Time
@@ -1110,6 +1143,9 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 		}
 		if ns.ImgS3 != "" {
 			props["imgS3"] = ns.ImgS3
+		}
+		if ns.HasRawImage() {
+			props["imgB64"] = ns.ImgB64
 		}
 		if ns.HasValidVisit() {
 			// TODO: ok to use mappy sub interface here?
@@ -1210,22 +1246,20 @@ func TrackToFeature(trackPointCurrent *trackPoint.TrackPoint) *geojson.Feature {
 	// } else {
 	// 	props["Notes"] = trackPointCurrent.Notes
 	// }
-	return geojson.NewFeature(p, props, 1)
+	return p
 }
 
 func FeatureToTrack(f geojson.Feature) (trackPoint.TrackPoint, error) {
 	var err error
 	tp := trackPoint.TrackPoint{}
-	g, err := f.GetGeometry()
-	if err != nil {
-		return tp, err
-	}
-	point, ok := g.(*geojson.Point)
+
+	p, ok := f.Geometry.(orb.Point)
 	if !ok {
 		return tp, errors.New("not a point")
 	}
-	tp.Lat = float64(point.Coordinates[1])
-	tp.Lng = float64(point.Coordinates[0])
+	tp.Lng = p.Lon()
+	tp.Lat = p.Lat()
+
 	if v, ok := f.Properties["UUID"]; ok {
 		tp.Uuid = v.(string)
 	}
@@ -1277,7 +1311,7 @@ func FeatureToTrack(f geojson.Feature) (trackPoint.TrackPoint, error) {
 }
 
 func TrackToPlace(tp *trackPoint.TrackPoint, visit note.NoteVisit) *geojson.Feature {
-	p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(visit.PlaceParsed.Lng), geojson.Coord(visit.PlaceParsed.Lat)})
+	p := geojson.NewFeature(orb.Point{visit.PlaceParsed.Lng, visit.PlaceParsed.Lat})
 
 	props := make(map[string]interface{})
 	props["Name"] = tp.Name
@@ -1288,7 +1322,8 @@ func TrackToPlace(tp *trackPoint.TrackPoint, visit note.NoteVisit) *geojson.Feat
 	props["PlaceAddress"] = visit.PlaceParsed.Address
 	props["Accuracy"] = visit.PlaceParsed.Acc
 
-	return geojson.NewFeature(p, props, 1)
+	p.Properties = props
+	return p
 }
 
 var NotifyNewEdge = make(chan bool, 1000)
@@ -1297,9 +1332,9 @@ var FeaturePlaceChan = make(chan *geojson.Feature, 100000)
 
 var masterGZLock sync.Mutex
 
-func storePoints(trackPoints trackPoint.TrackPoints) error {
+func storePoints(features []*geojson.Feature) error {
 	var err error
-	if trackPoints.Len() == 0 {
+	if len(features) == 0 {
 		return errors.New("0 trackpoints to store")
 	}
 	// var f F
@@ -1357,22 +1392,22 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 	// 		NotifyNewPlace <- true
 	// 	}()
 	// }
-	for _, point := range trackPoints {
+	for _, feature := range features {
 		// storePoint can modify the point, like tp.ID, tp.imgS3 field
-		e := storePoint(point)
+		e := storePoint(feature)
 		if e != nil {
 			log.Println("store point error: ", e)
 			continue
 		}
-		var t2f *geojson.Feature
-		if tracksGZPath != "" || tracksGZPathEdge != "" || tracksGZPathDevop != "" {
-			t2f = TrackToFeature(point)
-		}
+		// var t2f *geojson.Feature
+		// if tracksGZPath != "" || tracksGZPathEdge != "" || tracksGZPathDevop != "" {
+		// 	 t2f = TrackToFeature(point)
+		// }
 		if tracksGZPath != "" {
-			featureChan <- t2f
+			featureChan <- feature
 		}
 		if tracksGZPathEdge != "" {
-			featureChanEdge <- t2f
+			featureChanEdge <- feature
 		}
 		// // tp has note has visit
 		// if !visit.ReportedTime.IsZero() && placesLayer {
@@ -1385,78 +1420,101 @@ func storePoints(trackPoints trackPoint.TrackPoints) error {
 	}
 
 	if err == nil {
-		l := len(trackPoints)
-		err = storemetadata(trackPoints[l-1], l)
-		storeLastKnown(trackPoints[l-1])
+		l := len(features)
+		// err = storemetadata(features[l-1], l)
+		storeLastKnown(features[l-1])
 	}
 	return err
 }
 
-func storePointVisit(point *trackPoint.TrackPoint, visit note.NoteVisit) error {
-	// google it
-	g, err := visit.GoogleNearbyQ()
+// func storePointVisit(point *trackPoint.TrackPoint, visit note.NoteVisit) error {
+// 	// google it
+// 	g, err := visit.GoogleNearbyQ()
+// 	if err != nil {
+// 		log.Println("google nearby failed", err)
+// 		return err
+// 	}
+//
+// 	log.Println("googleNearby OK")
+//
+// 	b, err := json.Marshal(g)
+// 	if err != nil {
+// 		log.Println("err marshalling googlenearby res", err)
+// 		return err
+// 	}
+//
+// 	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
+// 		pg := tx.Bucket([]byte(googlefindnearby))
+// 		err = pg.Put(buildTrackpointKey(point), b)
+// 		if err != nil {
+// 			log.Println("could not write google response to bucket", err)
+// 			return err
+// 		}
+// 		return nil
+// 	}); err != nil {
+// 		log.Println("err saving googlenearby info", err)
+// 		return err
+// 	}
+//
+// 	visit.GoogleNearby = g
+// 	placePhotos, err := visit.GoogleNearbyImagesQ()
+// 	if err != nil {
+// 		log.Println("err could not query visit photos", err)
+// 		return err
+// 	}
+// 	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
+// 		pp := tx.Bucket([]byte(googlefindnearbyphotos))
+// 		var e error // only return last err (nonhalting)
+// 		for ref, b64 := range placePhotos {
+// 			if err := pp.Put([]byte(ref), []byte(b64)); err != nil {
+// 				log.Println("err storing photoref:b64", err)
+// 				e = err
+// 			}
+// 		}
+// 		return e
+// 	}); err != nil {
+// 		log.Println("err saving googlenearby PHOTOS info", err)
+// 		return err
+// 	} else {
+// 		log.Println("saved googlenearby ", len(placePhotos), "photos")
+// 	}
+// 	return nil
+// }
+
+func mustGetTime(f *geojson.Feature) time.Time {
+	timeStr, ok := f.Properties["Time"].(string)
+	if !ok {
+		timeStr = time.Now().Format(time.RFC3339)
+	}
+	t, err := time.Parse(time.RFC3339, timeStr)
 	if err != nil {
-		log.Println("google nearby failed", err)
-		return err
+		return time.Now()
 	}
-
-	log.Println("googleNearby OK")
-
-	b, err := json.Marshal(g)
-	if err != nil {
-		log.Println("err marshalling googlenearby res", err)
-		return err
-	}
-
-	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
-		pg := tx.Bucket([]byte(googlefindnearby))
-		err = pg.Put(buildTrackpointKey(point), b)
-		if err != nil {
-			log.Println("could not write google response to bucket", err)
-			return err
-		}
-		return nil
-	}); err != nil {
-		log.Println("err saving googlenearby info", err)
-		return err
-	}
-
-	visit.GoogleNearby = g
-	placePhotos, err := visit.GoogleNearbyImagesQ()
-	if err != nil {
-		log.Println("err could not query visit photos", err)
-		return err
-	}
-	if err := GetDB("master").Update(func(tx *bolt.Tx) error {
-		pp := tx.Bucket([]byte(googlefindnearbyphotos))
-		var e error // only return last err (nonhalting)
-		for ref, b64 := range placePhotos {
-			if err := pp.Put([]byte(ref), []byte(b64)); err != nil {
-				log.Println("err storing photoref:b64", err)
-				e = err
-			}
-		}
-		return e
-	}); err != nil {
-		log.Println("err saving googlenearby PHOTOS info", err)
-		return err
-	} else {
-		log.Println("saved googlenearby ", len(placePhotos), "photos")
-	}
-	return nil
+	return t
 }
 
-func buildTrackpointKey(tp *trackPoint.TrackPoint) []byte {
-	if tp.Uuid == "" {
-		if tp.ID != 0 {
-			return i64tob(tp.ID)
+func buildTrackpointKey(tp *geojson.Feature) []byte {
+	tpUUID, ok := tp.Properties["UUID"].(string)
+	if !ok {
+		// Use ID if no UUID.
+		if tpID, ok := tp.Properties["ID"]; ok {
+			if tpID, ok := tpID.(int); ok {
+				return i64tob(int64(tpID))
+			}
 		}
-		return i64tob(tp.Time.UnixNano())
+		// Use Name if no UUID and no ID.
+		if tpName, ok := tp.Properties["Name"]; ok {
+			if tpName, ok := tpName.(string); ok {
+				tpUUID = tpName
+			}
+		}
+		return i64tob(mustGetTime(tp).UnixNano())
 	}
+
 	// have uuid
 	k := []byte{}
-	k = append(k, i64tob(tp.Time.UnixNano())...)
-	k = append(k, []byte(tp.Uuid)...)
+	k = append(k, []byte(tpUUID)...)
+	k = append(k, i64tob(mustGetTime(tp).UnixNano())...)
 	return k
 }
 
@@ -1464,25 +1522,76 @@ var errDuplicatePoint = fmt.Errorf("duplicate point")
 
 var dedupeCache = lru.New(500_000)
 
-func storePoint(tp *trackPoint.TrackPoint) error {
+func validatePoint(tp *geojson.Feature) error {
+	if tp == nil {
+		return fmt.Errorf("nil point")
+	}
+	if tp.Geometry == nil {
+		return fmt.Errorf("nil geometry")
+	}
+	if _, ok := tp.Geometry.(orb.Point); !ok {
+		return fmt.Errorf("not a point")
+
+	}
+	if tp.Properties == nil {
+		return fmt.Errorf("nil properties")
+	}
+	if tp.Properties["Name"] == nil {
+		return fmt.Errorf("nil name")
+	}
+	if _, ok := tp.Properties["Name"].(string); !ok {
+		return fmt.Errorf("name not a string")
+	}
+	if tp.Properties["UUID"] == nil {
+		return fmt.Errorf("nil uuid")
+	}
+	if _, ok := tp.Properties["UUID"].(string); !ok {
+		return fmt.Errorf("uuid not a string")
+	}
+	if tp.Properties["Time"] == nil {
+		return fmt.Errorf("nil time")
+	}
+	if _, ok := tp.Properties["Time"].(string); !ok {
+		return fmt.Errorf("time not a string")
+	}
+	return nil
+}
+
+func storePoint(feat *geojson.Feature) error {
 	var err error
-	if tp.Time.IsZero() {
-		tp.Time = time.Now()
+
+	if err := validatePoint(feat); err != nil {
+		return err
 	}
 
-	if tp.Lat > 90 || tp.Lat < -90 {
-		return fmt.Errorf("invalid coordinate: lat=%.14f", tp.Lat)
+	tpTimeStr, ok := feat.Properties["Time"].(string)
+	if !ok || tpTimeStr == "" {
+		tpTimeStr = time.Now().Format(time.RFC3339)
 	}
-	if tp.Lng > 180 || tp.Lng < -180 {
-		return fmt.Errorf("invalid coordinate: lng=%.14f", tp.Lng)
+	tpTime, err := time.Parse(time.RFC3339, tpTimeStr)
+	if err != nil {
+		return err
+	}
+
+	pt, ok := feat.Geometry.(orb.Point)
+	if !ok {
+		return fmt.Errorf("not a point: %v", feat.Geometry)
+	}
+	ptLng, ptLat := pt[0], pt[1]
+
+	if ptLat > 90 || ptLat < -90 {
+		return fmt.Errorf("invalid coordinate: lat=%.14f", ptLat)
+	}
+	if ptLng > 180 || ptLng < -180 {
+		return fmt.Errorf("invalid coordinate: lng=%.14f", ptLng)
 	}
 
 	// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
-	tp.ID = tp.Time.UnixNano() // dunno if can really get nanoy, or if will just *1000.
-	tpBoltKey := buildTrackpointKey(tp)
+	feat.ID = tpTime.UnixNano() // dunno if can really get nanoy, or if will just *1000.
+	tpBoltKey := buildTrackpointKey(feat)
 
 	// gets "" case nontestesing
-	tp.Name = getTestesPrefix() + tp.Name
+	feat.Properties["Name"] = getTestesPrefix() + feat.Properties["Name"].(string)
 
 	if _, ok := dedupeCache.Get(string(tpBoltKey)); ok {
 		// duplicate point
@@ -1490,130 +1599,74 @@ func storePoint(tp *trackPoint.TrackPoint) error {
 	}
 	dedupeCache.Add(string(tpBoltKey), true)
 
-	if tp.Notes == "" {
+	// handle storing images
+	if feat.Properties["imgB64"] == nil {
 		return nil
 	}
-	// handle storing images
-	ns, e := note.NotesField(tp.Notes).AsNoteStructured()
-	if e != nil {
-		err = e
-		return fmt.Errorf("decode notes error: %w", e)
+
+	// define 'key' for s3 upload
+	k := fmt.Sprintf("%s_%s_%d", catnames.AliasOrSanitizedName(feat.Properties["Name"].(string)),
+		feat.Properties["UUID"].(string), tpTime.Unix()) // RandStringRunes(32)
+	if os.Getenv("AWS_BUCKETNAME") != "" {
+		feat.Properties["imgS3"] = os.Getenv("AWS_BUCKETNAME") + "/" + k
+	} else {
+		// won't be an s3 url, but will have a sufficient filename for indexing
+		feat.Properties["imgS3"] = k
 	}
 
-	if ns.HasRawImage() {
-		// decode base64 -> image
-		// define 'key' for s3 upload
-		b64 := ns.ImgB64
-		k := fmt.Sprintf("%s_%s_%d", catnames.AliasOrSanitizedName(tp.Name), tp.Uuid, tp.Time.Unix()) // RandStringRunes(32)
-		if os.Getenv("AWS_BUCKETNAME") != "" {
-			ns.ImgS3 = os.Getenv("AWS_BUCKETNAME") + "/" + k
-		} else {
-			// won't be an s3 url, but will have a sufficient filename for indexing
-			ns.ImgS3 = k
+	// decode base64 -> image
+	b64 := feat.Properties["imgB64"].(string)
+
+	jpegBytes, jpegErr := b64ToJPGBytes(b64)
+	if jpegErr != nil {
+		log.Println("Error converting b64 to jpeg bytes: err=", jpegErr)
+		return jpegErr
+	}
+
+	// remove the b64 from the properties
+	delete(feat.Properties, "imgB64")
+
+	_db := GetDB("master")
+
+	go func() {
+		// save jpg to fs
+		dbRootDir := filepath.Dir(_db.Path())
+		catsnapsDir := filepath.Join(dbRootDir, "catsnaps")
+		os.MkdirAll(catsnapsDir, 0755)
+		imagePath := filepath.Join(catsnapsDir, k+".jpg")
+		if e := os.WriteFile(imagePath, jpegBytes, 0644); e != nil {
+			log.Println("Error writing catsnap to fs: err=", e)
+			err = e
 		}
-
-		ns.ImgB64 = ""
-		tp.Notes = ns.MustAsString()
-		jpegBytes, jpegErr := b64ToJPGBytes(b64)
-		if jpegErr != nil {
-			log.Println("Error converting b64 to jpeg bytes: err=", jpegErr)
-			return jpegErr
-		}
-
-		_db := GetDB("master")
-
+	}()
+	if os.Getenv("AWS_BUCKETNAME") != "" {
 		go func() {
-			// save jpg to fs
-			dbRootDir := filepath.Dir(_db.Path())
-			catsnapsDir := filepath.Join(dbRootDir, "catsnaps")
-			os.MkdirAll(catsnapsDir, 0755)
-			imagePath := filepath.Join(catsnapsDir, k+".jpg")
-			if e := os.WriteFile(imagePath, jpegBytes, 0644); e != nil {
-				log.Println("Error writing catsnap to fs: err=", e)
+			if e := storeImageS3(k, jpegBytes); e != nil {
 				err = e
 			}
 		}()
-		if os.Getenv("AWS_BUCKETNAME") != "" {
-			go func() {
-				if e := storeImageS3(k, jpegBytes); e != nil {
-					err = e
-				}
-			}()
-		}
-
-		err = _db.Update(func(tx *bolt.Tx) error {
-
-			// trackBucket, err := tx.CreateBucketIfNotExists([]byte(trackKey))
-			// if err != nil {
-			// 	return err
-			// }
-			//
-			// if exists := trackBucket.Get(tpBoltKey); exists != nil {
-			// 	// make sure same cat
-			// 	var existingTrackpoint trackPoint.TrackPoint
-			// 	e := json.Unmarshal(exists, &existingTrackpoint)
-			// 	if e != nil {
-			// 		fmt.Println("Checking on an existing trackpoint and got an error with one of the existing trackpoints unmarshaling.")
-			// 		return fmt.Errorf("unmarshal error: %v", e)
-			// 	}
-			// 	// use Name and Uuid conditions because Uuid tracking was introduced after Name, so not all points/cats/apps have it. So Name is backwards-friendly.
-			// 	if existingTrackpoint.Name == tp.Name && existingTrackpoint.Uuid == tp.Uuid {
-			// 		fmt.Println("Got redundant track; not storing: ", tp.Name, tp.Uuid, tp.Time)
-			// 		return errDuplicatePoint
-			// 	}
-			// }
-
-			snapBuck, err := tx.CreateBucketIfNotExists([]byte(catsnapsKey))
-			if err != nil {
-				return err
-			}
-			trackPointJSON, e := json.Marshal(tp)
-			if e != nil {
-				log.Println("Error marshaling catsnap JSON: err=", e)
-				err = e
-				return err
-			}
-			e = snapBuck.Put(tpBoltKey, trackPointJSON)
-			if e != nil {
-				log.Println("Error storing catsnap: err=", e)
-				err = e
-				return err
-			}
-			log.Println("Saved catsnap: ", tp)
-
-			// trackPointJSON, e := json.Marshal(tp)
-			// if e != nil {
-			// 	log.Println("Error marshaling trackpoint JSON: err=", e)
-			// 	err = e
-			// 	return err
-			// }
-			// e = trackBucket.Put(tpBoltKey, trackPointJSON)
-			// if e != nil {
-			// 	log.Println("Error storing trackpoint: err=", e)
-			// 	err = e
-			// 	return err
-			// }
-			// fmt.Println("Saved trackpoint: ", tp)
-
-			// if ns.HasValidVisit() {
-			// 	visit, err = ns.Visit.AsVisit()
-			// 	if err != nil {
-			// 		return fmt.Errorf("as visit err: %v", err)
-			// 	}
-			// 	visit.Uuid = tp.Uuid
-			// 	visit.Name = tp.Name
-			// 	visit.PlaceParsed = visit.Place.MustAsPlace()
-			// 	visit.ReportedTime = tp.Time
-			// 	visit.Duration = visit.GetDuration()
-			// 	err = storeVisit(tx, tpBoltKey, visit)
-			// 	if err != nil {
-			// 		return fmt.Errorf("storing visit err: %v", err)
-			// 	}
-			// }
-
-			return err
-		})
 	}
+
+	err = _db.Update(func(tx *bolt.Tx) error {
+		snapBuck, err := tx.CreateBucketIfNotExists([]byte(catsnapsGeoJSONKey))
+		if err != nil {
+			return err
+		}
+		featureJSON, e := json.Marshal(feat)
+		if e != nil {
+			log.Println("Error marshaling catsnap JSON: err=", e)
+			err = e
+			return err
+		}
+		e = snapBuck.Put(tpBoltKey, featureJSON)
+		if e != nil {
+			log.Println("Error storing catsnap: err=", e)
+			err = e
+			return err
+		}
+		log.Println("Saved catsnap: ", feat)
+		return err
+	})
 
 	if err != nil {
 		log.Println(err)
@@ -1804,58 +1857,129 @@ func getPointsQT(query *query) (tps trackPoint.TPs, err error) {
 	return tps, err
 }
 
-func getCatSnaps(startTime, endTime time.Time) ([]*trackPoint.TrackPoint, error) {
-	var tps []*trackPoint.TrackPoint
-	// err := GetDB("master").Update(func(tx *bolt.Tx) error {
-	err := GetDB("master").View(func(tx *bolt.Tx) error {
-		b := tx.Bucket([]byte(catsnapsKey))
-		b.ForEach(func(k, v []byte) error {
+// TODO
+// What if tracks were stored in DB gzipped? 356GB -> ? GB
+// What if we duplicated or organized (indexed) gzip tracks by DAY?
+// The ability to actually read tracks by time would be useful, at least for
+// stuff like segment-arbitration backtesting and gps filter/smoothing backtesting.
+// Is this 'export'? 'read'? 'query'? 'get'?
+
+func migrateCatSnaps() error {
+	err := GetDB("master").Update(func(tx *bolt.Tx) error {
+		trackSnaps := tx.Bucket([]byte(catsnapsKey))
+		geoSnaps, err := tx.CreateBucketIfNotExists([]byte(catsnapsGeoJSONKey))
+		if err != nil {
+			return err
+		}
+
+		trackSnaps.ForEach(func(k, v []byte) error {
 			var tp *trackPoint.TrackPoint
 			err := json.Unmarshal(v, &tp)
 			if err != nil {
 				return err
 			}
 
-			// Skip catsnaps before parameterized start limit.
-			if !startTime.IsZero() && tp.Time.Before(startTime) {
-				return nil
-			}
-			if !endTime.IsZero() && tp.Time.After(endTime) {
-				return nil
+			f := TrackToFeature(tp)
+			fb, err := json.Marshal(f)
+			if err != nil {
+				return err
 			}
 
-			// // HACK: patch up reckless base64 storing
-			// if ns, e := note.NotesField(tp.Notes).AsNoteStructured(); e == nil && ns.HasRawImage() {
-			// 	ns.ImgB64 = ""
-			// 	tp.Notes = ns.MustAsString()
-			// 	if by, err := json.Marshal(tp); err != nil {
-			// 		b.Put(k, by)
-			// 	}
-			// }
-
-			// HACK: skip all catsnaps with raw images.
-			// There are very few (maybe only one) of these.
-			// The above hack should have fixed this.
-			if ns, e := note.NotesField(tp.Notes).AsNoteStructured(); e == nil && ns.HasRawImage() {
-				return nil
-			} else if e == nil && !ns.HasS3Image() {
-				return nil
+			err = geoSnaps.Put(k, fb)
+			if err != nil {
+				return err
 			}
-			tps = append(tps, tp)
 			return nil
 		})
 		return nil
 	})
-	if err != nil {
-		return nil, err
+	return err
+}
+
+func getCatSnaps(startTime, endTime time.Time) ([]*geojson.Feature, error) {
+	// func getCatSnaps(startTime, endTime time.Time) ([]*geojson.Feature, error) {
+	features := []*geojson.Feature{}
+	var err error
+
+	initGeoCatSnaps := false
+
+	err = GetDB("master").View(func(tx *bolt.Tx) error {
+
+		trackSnapsBucket := tx.Bucket([]byte(catsnapsKey))
+
+		// 20240127: Migrating to geojson.Features.
+		geoSnapsBucket := tx.Bucket([]byte(catsnapsGeoJSONKey))
+
+		// initGeoCatSnaps will be used to arbitrate migration logic.
+		initGeoCatSnaps = geoSnapsBucket == nil
+
+		if geoSnapsBucket == nil {
+			// Original, pre-migration.
+			if err := trackSnapsBucket.ForEach(func(k, v []byte) error {
+				var tp *trackPoint.TrackPoint
+				err := json.Unmarshal(v, &tp)
+				if err != nil {
+					return err
+				}
+
+				// Skip catsnaps before parameterized start limit.
+				if !startTime.IsZero() && tp.Time.Before(startTime) {
+					return nil
+				}
+				if !endTime.IsZero() && tp.Time.After(endTime) {
+					return nil
+				}
+
+				if ns, e := note.NotesField(tp.Notes).AsNoteStructured(); e != nil || !ns.HasS3Image() {
+					return nil
+				}
+
+				f := TrackToFeature(tp)
+				features = append(features, f)
+
+				return nil
+			}); err != nil {
+				return err
+			}
+		} else {
+			if err := geoSnapsBucket.ForEach(func(k, v []byte) error {
+				feat, err := geojson.UnmarshalFeature(v)
+				if err != nil {
+					return err
+				}
+
+				if _, ok := feat.Properties["imgS3"]; !ok || feat.Properties["imgS3"].(string) == "" {
+					return nil
+				}
+
+				t := mustGetTime(feat)
+
+				// Skip catsnaps before parameterized start limit.
+				if !startTime.IsZero() && t.Before(startTime) {
+					return nil
+				}
+				if !endTime.IsZero() && t.After(endTime) {
+					return nil
+				}
+
+				features = append(features, feat)
+				return nil
+			}); err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+
+	if err == nil && initGeoCatSnaps {
+		go func() {
+			log.Println("Migrating cat snaps to geojson features")
+			if err := migrateCatSnaps(); err != nil {
+				log.Println("Error migrating cat snaps to geojson features", err)
+			}
+		}()
 	}
 
-	return tps, nil
-
-	// bs, err := json.Marshal(tps)
-	// if err != nil {
-	// 	return nil, err
-	// }
-	//
-	// return bs, err
+	return features, err
 }

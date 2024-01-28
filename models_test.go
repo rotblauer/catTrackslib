@@ -46,3 +46,13 @@ func TestTrackToFeature2(t *testing.T) {
 	t.Log(string(j2))
 
 }
+
+func TestUnmarshalGeoJSONFeatureToTrackpoint(t *testing.T) {
+	featureData := `{"type":"Feature","id":1,"geometry":{"type":"Point","coordinates":[-111.6902394,45.5710214]},"properties":{"AccelerometerX":-0.04,"AccelerometerY":-9.75,"AccelerometerZ":-1.34,"Accuracy":7.4,"Activity":"Automotive","ActivityConfidence":100,"CurrentTripStart":"2024-01-24T15:15:25.953881Z","Distance":221,"Elevation":1463.3,"GyroscopeX":0,"GyroscopeY":-0.01,"GyroscopeZ":0,"Heading":-1,"Name":"tonga-moto-63b2","NumberOfSteps":9821,"Pressure":846.93,"Speed":0,"Time":"2024-01-24T22:35:19.199Z","UUID":"63b2bab96ca49573","UnixTime":1706135719,"UserAccelerometerX":0,"UserAccelerometerY":-0.03,"UserAccelerometerZ":-0.01,"Version":"gcps/v0.0.0+4","vAccuracy":1.7}}`
+	tp := trackPoint.TrackPoint{}
+	err := json.Unmarshal([]byte(featureData), &tp)
+	if err == nil {
+		t.Error("should have failed") // does fail
+		t.Log(tp.Name, tp.Uuid)
+	}
+}

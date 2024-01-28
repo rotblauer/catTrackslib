@@ -17,6 +17,7 @@ require (
 	github.com/lib/pq v1.10.6
 	github.com/montanaflynn/stats v0.6.6
 	github.com/olahol/melody v0.0.0-20180227134253-7bd65910e5ab
+	github.com/paulmach/orb v0.11.0
 	github.com/rotblauer/catnotelib v0.0.0-20231228161446-d583a3a29cfe
 	github.com/rotblauer/cattracks-names v0.0.0-20231227161414-4d1ce84a24c2
 	github.com/rotblauer/tileTester2 v0.0.0-20190203193258-ee43a1e88d7e
@@ -29,6 +30,7 @@ require (
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
+	go.mongodb.org/mongo-driver v1.11.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b // indirect
 	golang.org/x/time v0.5.0 // indirect

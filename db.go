@@ -1,14 +1,10 @@
 package catTrackslib
 
 import (
-	"encoding/binary"
-	"encoding/json"
 	"fmt"
 	"log"
 	"path/filepath"
 
-	"github.com/golang/geo/s2"
-	"github.com/rotblauer/trackpoints/trackPoint"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -24,6 +20,7 @@ var (
 	googlefindnearbyphotos = "googlefindnearbyphotos"
 	placesByCoord          = "placesByCoord"
 	catsnapsKey            = "catsnaps"
+	catsnapsGeoJSONKey     = "catsnaps-geojson"
 	allBuckets             = []string{trackKey, statsKey, "names", "geohash", placesKey, googlefindnearby, googlefindnearbyphotos, placesByCoord, catsnapsKey}
 )
 
@@ -104,51 +101,51 @@ func InitBoltDB() error {
 	return nil
 }
 
-// BuildIndexBuckets populates name, lat, and long buckets from main "tracks" (time) bucket.
-func BuildIndexBuckets() error {
-	err := db.View(func(tx *bolt.Tx) error {
-		err := tx.Bucket([]byte(trackKey)).ForEach(func(key, val []byte) error {
-
-			var tp *trackPoint.TrackPoint
-			if err := json.Unmarshal(val, &tp); err != nil {
-				return err
-			}
-
-			// update "name"
-			if err := db.Update(func(txx *bolt.Tx) error {
-				bname := txx.Bucket([]byte("names"))
-
-				bByName, _ := bname.CreateBucketIfNotExists([]byte(tp.Name))
-
-				err := bByName.Put(buildTrackpointKey(tp), val)
-				return err
-			}); err != nil {
-				return err
-			}
-
-			// under geohasher keys
-			if err := db.Update(func(txx *bolt.Tx) error {
-				b := txx.Bucket([]byte("geohash"))
-
-				// Compute the CellID for lat, lng
-				c := s2.CellIDFromLatLng(s2.LatLngFromDegrees(tp.Lat, tp.Lng))
-
-				// store the uint64 value of c to its bigendian binary form
-				hashkey := make([]byte, 8)
-				binary.BigEndian.PutUint64(hashkey, uint64(c))
-
-				e := b.Put(hashkey, val)
-				if e != nil {
-					fmt.Println("shit geohash index err", e)
-					return fmt.Errorf("shit geohash index err: %v", e)
-				}
-				return nil
-			}); err != nil {
-				return err
-			}
-			return nil
-		})
-		return err
-	})
-	return err
-}
+// // BuildIndexBuckets populates name, lat, and long buckets from main "tracks" (time) bucket.
+// func BuildIndexBuckets() error {
+// 	err := db.View(func(tx *bolt.Tx) error {
+// 		err := tx.Bucket([]byte(trackKey)).ForEach(func(key, val []byte) error {
+//
+// 			var tp *trackPoint.TrackPoint
+// 			if err := json.Unmarshal(val, &tp); err != nil {
+// 				return err
+// 			}
+//
+// 			// update "name"
+// 			if err := db.Update(func(txx *bolt.Tx) error {
+// 				bname := txx.Bucket([]byte("names"))
+//
+// 				bByName, _ := bname.CreateBucketIfNotExists([]byte(tp.Name))
+//
+// 				err := bByName.Put(buildTrackpointKey(tp), val)
+// 				return err
+// 			}); err != nil {
+// 				return err
+// 			}
+//
+// 			// under geohasher keys
+// 			if err := db.Update(func(txx *bolt.Tx) error {
+// 				b := txx.Bucket([]byte("geohash"))
+//
+// 				// Compute the CellID for lat, lng
+// 				c := s2.CellIDFromLatLng(s2.LatLngFromDegrees(tp.Lat, tp.Lng))
+//
+// 				// store the uint64 value of c to its bigendian binary form
+// 				hashkey := make([]byte, 8)
+// 				binary.BigEndian.PutUint64(hashkey, uint64(c))
+//
+// 				e := b.Put(hashkey, val)
+// 				if e != nil {
+// 					fmt.Println("shit geohash index err", e)
+// 					return fmt.Errorf("shit geohash index err: %v", e)
+// 				}
+// 				return nil
+// 			}); err != nil {
+// 				return err
+// 			}
+// 			return nil
+// 		})
+// 		return err
+// 	})
+// 	return err
+// }
