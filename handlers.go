@@ -9,11 +9,11 @@ import (
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"os"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
 
 	"github.com/rotblauer/trackpoints/trackPoint"
@@ -35,69 +35,58 @@ func getData(query *query) ([]byte, error) {
 }
 
 type forwardingQueueItem struct {
-	payload []byte
 	request *http.Request
+	payload []byte
 }
 
-var backlogPopulators []*forwardingQueueItem
+func tryForwardPopulate() {
+	client := &http.Client{Timeout: time.Second * 10}
 
-func handleForwardPopulate(r *http.Request, bod []byte) (err error) {
+	forwardTargetRequestsLock.Lock()
+	defer forwardTargetRequestsLock.Unlock()
 
-	if forwardPopulate == "" {
-		log.Println("no forward url, not forwarding")
+targetLoop:
+	for target, cache := range forwardTargetRequests {
+		if cache.Len() == 0 {
+			continue
+		}
+
+		for k, v := range cache.Items() {
+			req := v.Value().request
+			req.URL = &target
+			req.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Println("forward populate error:", err, "target:", target)
+				continue targetLoop
+			}
+			if err := resp.Body.Close(); err != nil {
+				log.Println("forward populate error (body close):", err, "target:", target)
+				continue targetLoop
+			}
+			cache.Delete(k)
+			log.Println("forward populate success:", target, "remaining:", cache.Len())
+		}
+	}
+}
+
+func handleForwardPopulate(r *http.Request, bod []byte) {
+
+	if forwardTargetRequests == nil {
+		log.Println("no forward targets, skipping")
 		return
 	}
 
-	backlogPopulators = append(backlogPopulators, &forwardingQueueItem{
-		request: r,
-		payload: bod,
-	})
-
-	log.Println("forwarding to:", forwardPopulate, "#reqs:", len(backlogPopulators))
-
-	var index int
-	client := &http.Client{}
-
-	for i, fqi := range backlogPopulators {
-		index = i
-		req, e := http.NewRequest("POST", forwardPopulate, bytes.NewBuffer(fqi.payload))
-		if e != nil {
-			err = e
-			break
-		}
-
-		// type Header map[string][]string
-		for k, v := range fqi.request.Header {
-			for _, vv := range v {
-				req.Header.Set(k, vv)
-			}
-		}
-
-		resp, e := client.Do(req)
-		if e != nil {
-			err = e
-			break
-		}
-
-		err = resp.Body.Close()
-		if err != nil {
-			break
-		}
+	forwardTargetRequestsLock.Lock()
+	for _, cache := range forwardTargetRequests {
+		cache.Set(time.Now().UnixNano(), &forwardingQueueItem{
+			request: r,
+			payload: bod,
+		}, ttlcache.DefaultTTL)
 	}
+	forwardTargetRequestsLock.Unlock()
 
-	if err == nil {
-		backlogPopulators = []*forwardingQueueItem{}
-	} else {
-		if index < len(backlogPopulators) {
-			backlogPopulators = append(backlogPopulators[:index], backlogPopulators[index+1:]...)
-		} else {
-			backlogPopulators = []*forwardingQueueItem{}
-		}
-
-		log.Println("forwarding error:", err, "index", index, "len backlog", len(backlogPopulators))
-	}
-
-	return
+	tryForwardPopulate()
 }
 
 // ToJSONbuffer converts some newline-delimited JSON to valid JSON buffer
@@ -361,19 +350,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
-	// if --forward-populate set, then make POST to set urls
-	// --forward-populate=[]string{<downstream.urls.that.wants.points/put/em/here>}
-	// goroutine keeps this request from block while pending this outgoing request
-	// this keeps an original POST from being dependent on a forward POST
-	go func() {
-		if err := handleForwardPopulate(r, body); err != nil {
-			log.Println("forward populate error: ", err)
-			// this just to persist any request that fails in case this process is terminated (backlogs are stored in mem)
-			os.WriteFile(fmt.Sprintf("dfp-%d", time.Now().UnixNano()), body, 0666)
-		} else {
-			log.Println("forward populate finished OK")
-		}
-	}()
+	go handleForwardPopulate(r, body)
 }
 
 func getLastKnown(w http.ResponseWriter, r *http.Request) {

@@ -3,8 +3,13 @@ package catTrackslib
 import (
 	"encoding/json"
 	"fmt"
+	"log"
+	"net/url"
 	"strings"
+	"sync"
+	"time"
 
+	"github.com/jellydator/ttlcache/v3"
 	bolt "go.etcd.io/bbolt"
 
 	"github.com/rotblauer/trackpoints/trackPoint"
@@ -15,7 +20,8 @@ const (
 )
 
 var testes = false
-var forwardPopulate string
+var forwardTargetRequests map[url.URL]*ttlcache.Cache[int64, *forwardingQueueItem]
+var forwardTargetRequestsLock = sync.Mutex{}
 
 var tracksGZPath string
 var tracksGZPathDevop string
@@ -42,12 +48,19 @@ func SetTestes(flagOption bool) {
 // NOTE that forwardPopulate is a []string, so all uri's should be given in comma-separated
 // format.
 func SetForwardPopulate(arguments string) {
-	forwardPopulate = arguments
-	// // catch noop for legibility
-	// if arguments == "" {
-	// 	return
-	// }
-	// forwardPopulate = append(forwardPopulate, strings.Split(arguments, ",")...)
+	forwardTargetRequests = make(map[url.URL]*ttlcache.Cache[int64, *forwardingQueueItem])
+	for _, rawURI := range strings.Split(arguments, ",") {
+		uri, e := url.Parse(rawURI)
+		if e != nil {
+			panic(e)
+		}
+		forwardTargetRequests[*uri] = ttlcache.New[int64, *forwardingQueueItem](
+			ttlcache.WithTTL[int64, *forwardingQueueItem](24 * time.Hour),
+		)
+		// Start the cache cleaner
+		go forwardTargetRequests[*uri].Start()
+		log.Println("forwarding to", uri)
+	}
 }
 
 func SetLiveTracksGZ(pathto string) {

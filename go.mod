@@ -13,7 +13,7 @@ require (
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/schema v1.2.0
-	github.com/kpawlik/geojson v0.0.0-20171201195549-1a4f120c6b41
+	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/lib/pq v1.10.6
 	github.com/montanaflynn/stats v0.6.6
 	github.com/olahol/melody v0.0.0-20180227134253-7bd65910e5ab
@@ -32,6 +32,7 @@ require (
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	go.mongodb.org/mongo-driver v1.11.4 // indirect
 	go.opencensus.io v0.24.0 // indirect
+	golang.org/x/sync v0.1.0 // indirect
 	golang.org/x/sys v0.0.0-20220627191245-f75cf1eec38b // indirect
 	golang.org/x/time v0.5.0 // indirect
 )
