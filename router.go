@@ -1,6 +1,8 @@
 package catTrackslib
 
 import (
+	"bytes"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -90,6 +92,26 @@ func tokenAuthenticationMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func forwardPopulateMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+		// Read and replace the body.
+		body, err := io.ReadAll(r.Body)
+		if err != nil {
+			log.Println("Error reading body:", err)
+			http.Error(w, "Error reading body", http.StatusBadRequest)
+			return
+		}
+		r.Body = io.NopCloser(bytes.NewBuffer(body))
+
+		// Call the forward populate handler.
+		go handleForwardPopulate(r, body)
+
+		// Call the next handler, which can be another middleware in the chain, or the final handler.
+		next.ServeHTTP(w, r)
+	})
+}
+
 func NewRouter() *mux.Router {
 
 	router := mux.NewRouter().StrictSlash(true)
@@ -104,8 +126,12 @@ func NewRouter() *mux.Router {
 	authenticatedAPIRoutes := apiRoutes.NewRoute().Subrouter()
 	authenticatedAPIRoutes.Use(tokenAuthenticationMiddleware)
 
-	authenticatedAPIRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
-	authenticatedAPIRoutes.Methods(http.MethodPost).Path("/populate").HandlerFunc(populatePoints)
+	populateRoutes := authenticatedAPIRoutes.NewRoute().Subrouter()
+	populateRoutes.Use(forwardPopulateMiddleware)
+
+	populateRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
+	populateRoutes.Methods(http.MethodPost).Path("/populate").HandlerFunc(populatePoints)
+
 	apiRoutes.Methods(http.MethodGet).Path("/lastknown").HandlerFunc(getLastKnown)
 	apiRoutes.Methods(http.MethodGet).Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
 

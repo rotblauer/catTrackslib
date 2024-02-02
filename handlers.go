@@ -198,23 +198,6 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	var err error
 
-	// if forwardPopulate != "" {
-	// 	body, err = ioutil.ReadAll(r.Body)
-	// 	// body := []byte{}
-	// 	// n, err :=
-	// 	if err != nil {
-	// 		log.Println("err reading body", err)
-	// 		http.Error(w, err.Error(), http.StatusInternalServerError)
-	// 		return
-	// 	}
-	// 	// log.Println("read body ok, read nbytes=", len(body))
-	// 	log.Println("read body ok, read nbytes=", len(body))
-	// 	// log.Println("body=", string(body))
-	// 	// And now set a new body, which will simulate the same data we read:
-	// 	// > https://stackoverflow.com/questions/43021058/golang-read-request-body#43021236
-	// 	r.Body = ioutil.NopCloser(bytes.NewBuffer(body))
-	// }
-
 	if r.Body == nil {
 		log.Println("error: body nil")
 		http.Error(w, "Please send a request body", 500)
@@ -349,8 +332,6 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		log.Println("respond write err:", errW)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
-
-	go handleForwardPopulate(r, body)
 }
 
 func getLastKnown(w http.ResponseWriter, r *http.Request) {
