@@ -356,7 +356,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	// return empty json of empty trackpoints to not have to download tons of shit
-	if errW := json.NewEncoder(w).Encode(&trackPoint.TrackPoints{}); errW != nil {
+	if errW := json.NewEncoder(w).Encode([]struct{}{}); errW != nil {
 		log.Println("respond write err:", errW)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
