@@ -186,6 +186,16 @@ readloop:
 var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or ndgeojson")
 
 func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
+	// try to decode as trackpoints
+	trackPoints := trackPoint.TrackPoints{}
+	if err := json.Unmarshal(data, &trackPoints); err == nil {
+		gja2 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
+		for _, tp := range trackPoints {
+			gja2 = append(gja2, TrackToFeature(tp))
+		}
+		return gja2, nil
+	}
+
 	// try to decode as geojson
 	gja := []*geojson.Feature{}
 	if err := json.Unmarshal(data, &gja); err == nil {
@@ -196,16 +206,6 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	gjfc := geojson.NewFeatureCollection()
 	if err := json.Unmarshal(data, &gjfc); err == nil {
 		return gjfc.Features, nil
-	}
-
-	// try to decode as trackpoints
-	trackPoints := trackPoint.TrackPoints{}
-	if err := json.Unmarshal(data, &trackPoints); err == nil {
-		gja2 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
-		for _, tp := range trackPoints {
-			gja2 = append(gja2, TrackToFeature(tp))
-		}
-		return gja2, nil
 	}
 
 	// ! FIXME This passes the test, but it doesn't work in the real world.
