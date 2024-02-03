@@ -21,19 +21,6 @@ import (
 	// "path"
 )
 
-func getData(query *query) ([]byte, error) {
-	var data []byte
-	allPoints, e := getPointsQT(query)
-	if e != nil {
-		return data, e
-	}
-	data, err := json.Marshal(allPoints)
-	if err != nil {
-		return data, err
-	}
-	return data, nil
-}
-
 type forwardingQueueItem struct {
 	request *http.Request
 	payload []byte
@@ -151,35 +138,6 @@ readloop:
 	// }
 	// out = bytes.TrimSuffix(out, []byte(","))
 	// out = append(out, []byte{byte(']'), byte('\n')}...)
-
-	// r := bufio.NewReader(reader)
-	//
-	// buffer.Write([]byte("["))
-	// for {
-	//	bytes, err := r.ReadBytes(byte('\n'))
-	//	//bytes, _, err := r.ReadLine()
-	//	buffer.Write(bytes)
-	//	//r.Peek(1)
-	//	if err == io.EOF || string(bytes) == "" {
-	//		break
-	//	}
-	//	buffer.Write([]byte(","))
-	// }
-	//
-	// bu := []byte{}
-	// buffer.Write(bu)
-	// bu = bytes.TrimSuffix(bu, []byte(","))
-	//
-	// buffer.Reset()
-	// buffer.Write(bu)
-	//
-	// //if bytes.Equal(buffer.Bytes()[buffer.Len()-1:], []byte(",")) {
-	// //	buffer.UnreadByte()
-	// //}
-	//
-	// buffer.Write([]byte("]"))
-	// buffer.Write([]byte("\n"))
-
 	// return out
 }
 

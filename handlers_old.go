@@ -131,18 +131,6 @@ type IftttBodyCatVisit struct {
 //
 // }
 
-func getMetaData(w http.ResponseWriter, r *http.Request) {
-	w.Header().Add("Access-Control-Allow-Origin", "*")
-
-	b, e := getmetadata()
-	if e != nil {
-		log.Println(e)
-		http.Error(w, e.Error(), http.StatusInternalServerError)
-	}
-	fmt.Println("Got metadata:", len(b), "bytes")
-	w.Write(b)
-}
-
 var decoder = schema.NewDecoder()
 
 // returns response type image
