@@ -1,10 +1,6 @@
 package catTrackslib
 
 import (
-	"encoding/json"
-	// "github.com/rotblauer/trackpoints/trackPoint"
-	"log"
-
 	"github.com/olahol/melody"
 )
 
@@ -28,22 +24,22 @@ func GetMelody() *melody.Melody {
 // on request
 func onMessageHandler(s *melody.Session, msg []byte) {
 
-	var q query
-	json.Unmarshal(msg, &q)
-
-	// var c = make(chan *trackPoint.TrackPoint)
-	pts, e := getPointsQT(&q)
-	// pts, e := socketPointsByQueryGeohash(&q)
-	if e != nil {
-		log.Println("Couldn't get points.")
-	}
-
-	buf, e := json.Marshal(pts)
-	if e != nil {
-		log.Println("shit marshaling job by the socket")
-	}
-
-	s.Write(buf)
+	// var q query
+	// json.Unmarshal(msg, &q)
+	//
+	// // var c = make(chan *trackPoint.TrackPoint)
+	// pts, e := getPointsQT(&q)
+	// // pts, e := socketPointsByQueryGeohash(&q)
+	// if e != nil {
+	// 	log.Println("Couldn't get points.")
+	// }
+	//
+	// buf, e := json.Marshal(pts)
+	// if e != nil {
+	// 	log.Println("shit marshaling job by the socket")
+	// }
+	//
+	// s.Write(buf)
 
 }
 

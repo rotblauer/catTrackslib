@@ -13,9 +13,18 @@ type CatTrackGeoJSON struct {
 }
 
 func (c CatTrackGeoJSON) String() string {
-	return fmt.Sprintf("Name: %s (%s), Coords: %v, Time: %v, Accuracy: %v, Speed: %v",
+	alias := catnames.AliasOrSanitizedName(c.Properties["Name"].(string))
+	dot := ""
+	switch alias {
+	case "rye":
+		dot = "🔵"
+	case "ia":
+		dot = "🔴"
+	}
+	return fmt.Sprintf("%s Name: %s (%s), Coords: %v, Time: %v, Accuracy: %v, Speed: %v",
+		dot,
 		c.Properties["Name"],
-		catnames.AliasOrSanitizedName(c.Properties["Name"].(string)),
+		alias,
 		c.Geometry.(orb.Point),
 		c.Properties["Time"],
 		c.Properties["Accuracy"],

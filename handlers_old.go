@@ -68,14 +68,14 @@ func getRaceJSON(w http.ResponseWriter, r *http.Request) {
 }
 
 func getPointsJSON(w http.ResponseWriter, r *http.Request) {
-	query := parseQuery(r, w)
+	// query := parseQuery(r, w)
 
-	data, eq := getData(query)
-	if eq != nil {
-		http.Error(w, eq.Error(), http.StatusInternalServerError)
-	}
-	fmt.Println("Receive ajax get data string ")
-	w.Write(data)
+	// data, eq := getData(query)
+	// if eq != nil {
+	// 	http.Error(w, eq.Error(), http.StatusInternalServerError)
+	// }
+	// fmt.Println("Receive ajax get data string ")
+	// w.Write(data)
 }
 
 var iftttWebhoook = "https://maker.ifttt.com/trigger/any_cat_visit/with/key/" + os.Getenv("IFTTT_WEBHOOK_TOKEN")

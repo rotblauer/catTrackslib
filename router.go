@@ -135,17 +135,24 @@ func NewRouter() *mux.Router {
 	router.Use(loggingMiddleware)
 
 	apiRoutes := router.NewRoute().Subrouter()
+
+	// All API routes use permissive CORS settings.
 	apiRoutes.Use(corsMiddleware)
 
+	// /ping is a simple server healthcheck endpoint
 	apiRoutes.Path("/ping").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte("pong"))
 	})
 
+	apiJSONRoutes := apiRoutes.NewRoute().Subrouter()
 	jsonMiddleware := contentTypeMiddlewareFor("application/json")
-	apiRoutes.Use(jsonMiddleware)
+	apiJSONRoutes.Use(jsonMiddleware)
 
-	authenticatedAPIRoutes := apiRoutes.NewRoute().Subrouter()
+	apiJSONRoutes.Path("/lastknown").HandlerFunc(getLastKnown).Methods(http.MethodGet)
+	apiJSONRoutes.Path("/catsnaps").HandlerFunc(handleGetCatSnaps).Methods(http.MethodGet)
+
+	authenticatedAPIRoutes := apiJSONRoutes.NewRoute().Subrouter()
 	authenticatedAPIRoutes.Use(tokenAuthenticationMiddleware)
 
 	populateRoutes := authenticatedAPIRoutes.NewRoute().Subrouter()
@@ -153,9 +160,6 @@ func NewRouter() *mux.Router {
 
 	populateRoutes.Path("/populate/").HandlerFunc(populatePoints).Methods(http.MethodPost)
 	populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
-
-	apiRoutes.Path("/lastknown").HandlerFunc(getLastKnown).Methods(http.MethodGet)
-	apiRoutes.Path("/catsnaps").HandlerFunc(handleGetCatSnaps).Methods(http.MethodGet)
 
 	return router
 }
