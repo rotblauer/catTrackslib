@@ -7,18 +7,22 @@ import (
 	"net/http"
 	"os"
 
+	ghandlers "github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 )
 
 // https://github.com/gorilla/mux#middleware
 
 func loggingMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Do stuff here
-		log.Println(r.RequestURI)
-		// Call the next handler, which can be another middleware in the chain, or the final handler.
-		next.ServeHTTP(w, r)
-	})
+	return ghandlers.LoggingHandler(os.Stdout, next)
+	// return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	// 	// Do stuff here
+	// 	dump, _ := httputil.DumpRequest(r, false)
+	// 	log.Println(string(dump))
+	//
+	// 	// Call the next handler, which can be another middleware in the chain, or the final handler.
+	// 	next.ServeHTTP(w, r)
+	// })
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
@@ -83,6 +87,12 @@ func tokenAuthenticationMiddleware(next http.Handler) http.Handler {
 
 		// Enforce token validation.
 		if token != validToken {
+			log.Println("Invalid token",
+				"token:", token, "validToken:", "***REDACTED***",
+				"method:", r.Method, "url:", r.URL, "proto:", r.Proto,
+				"host:", r.Host, "remote-addr:", r.RemoteAddr,
+				"request-URI:", r.RequestURI, "content-length:", r.ContentLength,
+				"user-agent:", r.UserAgent())
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
@@ -114,11 +124,23 @@ func forwardPopulateMiddleware(next http.Handler) http.Handler {
 
 func NewRouter() *mux.Router {
 
-	router := mux.NewRouter().StrictSlash(true)
+	/*
+		StrictSlash defines the trailing slash behavior for new routes. The initial value is false.
+		When true, if the route path is "/path/", accessing "/path" will perform a redirect to the former and vice versa. In other words, your application will always see the path as specified in the route.
+		When false, if the route path is "/path", accessing "/path/" will not match this route and vice versa.
+		The re-direct is a HTTP 301 (Moved Permanently). Note that when this is set for routes with a non-idempotent method (e.g. POST, PUT), the subsequent re-directed request will be made as a GET by most clients. Use middleware or client settings to modify this behaviour as needed.
+		Special case: when a route sets a path prefix using the PathPrefix() method, strict slash is ignored for that route because the redirect behavior can't be determined from a prefix alone. However, any subrouters created from that route inherit the original StrictSlash setting
+	*/
+	router := mux.NewRouter().StrictSlash(false)
 	router.Use(loggingMiddleware)
 
 	apiRoutes := router.NewRoute().Subrouter()
 	apiRoutes.Use(corsMiddleware)
+
+	apiRoutes.Path("/ping").HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("pong"))
+	})
 
 	jsonMiddleware := contentTypeMiddlewareFor("application/json")
 	apiRoutes.Use(jsonMiddleware)
@@ -129,18 +151,11 @@ func NewRouter() *mux.Router {
 	populateRoutes := authenticatedAPIRoutes.NewRoute().Subrouter()
 	populateRoutes.Use(forwardPopulateMiddleware)
 
-	populateRoutes.Methods(http.MethodPost).Path("/populate/").HandlerFunc(populatePoints)
-	populateRoutes.Methods(http.MethodPost).Path("/populate").HandlerFunc(populatePoints)
+	populateRoutes.Path("/populate/").HandlerFunc(populatePoints).Methods(http.MethodPost)
+	populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
 
-	apiRoutes.Methods(http.MethodGet).Path("/lastknown").HandlerFunc(getLastKnown)
-	apiRoutes.Methods(http.MethodGet).Path("/catsnaps").HandlerFunc(handleGetCatSnaps)
-
-	// File server merveres
-	ass := http.StripPrefix("/ass/", http.FileServer(http.Dir("./ass/")))
-	router.PathPrefix("/ass/").Handler(ass)
-
-	bower := http.StripPrefix("/bower_components/", http.FileServer(http.Dir("./bower_components/")))
-	router.PathPrefix("/bower_components/").Handler(bower)
+	apiRoutes.Path("/lastknown").HandlerFunc(getLastKnown).Methods(http.MethodGet)
+	apiRoutes.Path("/catsnaps").HandlerFunc(handleGetCatSnaps).Methods(http.MethodGet)
 
 	return router
 }

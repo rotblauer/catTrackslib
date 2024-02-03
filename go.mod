@@ -11,6 +11,7 @@ require (
 	github.com/deet/simpleline v0.0.0-20140919022041-9d297ff784a2
 	github.com/golang/geo v0.0.0-20210211234256-740aa86cb551
 	github.com/golang/groupcache v0.0.0-20200121045136-8c9f03a8e57e
+	github.com/gorilla/handlers v1.5.2
 	github.com/gorilla/mux v1.8.0
 	github.com/gorilla/schema v1.2.0
 	github.com/jellydator/ttlcache/v3 v3.1.1
@@ -27,6 +28,7 @@ require (
 )
 
 require (
+	github.com/felixge/httpsnoop v1.0.3 // indirect
 	github.com/google/uuid v1.5.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect

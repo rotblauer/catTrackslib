@@ -4,18 +4,18 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"net/http/httputil"
-	"regexp"
+	"os"
 	"strconv"
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
-
 	"github.com/rotblauer/trackpoints/trackPoint"
 	// "os"
 	// "path"
@@ -50,22 +50,36 @@ targetLoop:
 		if cache.Len() == 0 {
 			continue
 		}
-
 		for k, v := range cache.Items() {
 			req := v.Value().request
-			req.URL = &target
 			req.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
-			resp, err := client.Do(req)
+			newReq, err := http.NewRequest(req.Method, target.String(), req.Body)
 			if err != nil {
-				log.Println("forward populate error:", err, "target:", target)
+				log.Println("-> forward populate error:", err, "target:", target)
 				continue targetLoop
 			}
+			newReq.Header = req.Header.Clone()
+			newReq.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
+
+			resp, err := client.Do(newReq)
+			if err != nil || resp == nil {
+				log.Printf("-> forward populate: target=%s err=%q pending=%d\n", target.String(), err, cache.Len())
+				continue targetLoop
+			}
+			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 			if err := resp.Body.Close(); err != nil {
-				log.Println("forward populate error (body close):", err, "target:", target)
+				log.Println("forward populate failed to close body", err, "target:", target)
+				continue targetLoop
+			}
+			if resp.StatusCode != http.StatusOK {
+				log.Println("forward populate failed, status:", resp.Status, "target:", target)
+				// log the request for debugging
+				if b, _ := httputil.DumpRequest(newReq, false); b != nil {
+					log.Println(string(b))
+				}
 				continue targetLoop
 			}
 			cache.Delete(k)
-			log.Println("forward populate success:", target, "remaining:", cache.Len())
 		}
 	}
 }
@@ -90,28 +104,53 @@ func handleForwardPopulate(r *http.Request, bod []byte) {
 }
 
 // ToJSONbuffer converts some newline-delimited JSON to valid JSON buffer
-func ndToJSONArray(reader io.Reader) []byte {
+func ndToJSONArray(reader io.Reader) ([]byte, error) {
+
+	breader := bufio.NewReader(reader)
+	wbuf := bytes.NewBuffer([]byte{})
+	bwriter := bufio.NewWriter(wbuf)
+
+readloop:
+	for {
+		read, err := breader.ReadBytes('\n')
+		if err != nil {
+			if errors.Is(err, os.ErrClosed) || errors.Is(err, io.EOF) {
+				break readloop
+			}
+			return nil, err
+		}
+		bwriter.Write(read)
+		bwriter.Write([]byte(","))
+	}
+	bwriter.Flush()
+	wrote := wbuf.Bytes()
+	wrote = bytes.TrimSuffix(wrote, []byte(","))
+	// wrote = append([]byte{'['}, wrote...)
+	// wrote = append(wrote, ']')
+	return bytes.Join([][]byte{{'['}, wrote, {']'}}, nil), nil
+	// return wrote, nil
+
 	// var buffer bytes.Buffer
 
 	// buffer.Write([]byte("["))
 
-	reg := regexp.MustCompile(`(?m)\S*`)
-	out := []byte("[")
-	scanner := bufio.NewScanner(reader)
-	for {
-		ok := scanner.Scan()
-		if ok {
-			sb := scanner.Bytes()
-			if reg.Match(sb) {
-				out = append(out, scanner.Bytes()...)
-				out = append(out, []byte(",")...)
-			}
-			continue
-		}
-		break
-	}
-	out = bytes.TrimSuffix(out, []byte(","))
-	out = append(out, []byte{byte(']'), byte('\n')}...)
+	// reg := regexp.MustCompile(`(?m)\S*`)
+	// out := []byte("[")
+	// scanner := bufio.NewScanner(reader)
+	// for {
+	// 	ok := scanner.Scan()
+	// 	if ok {
+	// 		sb := scanner.Bytes()
+	// 		if reg.Match(sb) {
+	// 			out = append(out, scanner.Bytes()...)
+	// 			out = append(out, []byte(",")...)
+	// 		}
+	// 		continue
+	// 	}
+	// 	break
+	// }
+	// out = bytes.TrimSuffix(out, []byte(","))
+	// out = append(out, []byte{byte(']'), byte('\n')}...)
 
 	// r := bufio.NewReader(reader)
 	//
@@ -141,7 +180,7 @@ func ndToJSONArray(reader io.Reader) []byte {
 	// buffer.Write([]byte("]"))
 	// buffer.Write([]byte("\n"))
 
-	return out
+	// return out
 }
 
 var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or ndgeojson")
@@ -160,40 +199,45 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	}
 
 	// try to decode as trackpoints
-	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 	trackPoints := trackPoint.TrackPoints{}
 	if err := json.Unmarshal(data, &trackPoints); err == nil {
+		gja2 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 		for _, tp := range trackPoints {
-			gja = append(gja, TrackToFeature(tp))
+			gja2 = append(gja2, TrackToFeature(tp))
 		}
-		return gja, nil
+		return gja2, nil
 	}
+
+	// ! FIXME This passes the test, but it doesn't work in the real world.
+	arrayBytes, err := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
+	if err != nil {
+		return nil, err
+	}
+	log.Println("attempting decode as ndjson instead..., length:", len(arrayBytes), string(arrayBytes))
 
 	// try to decode as ndgeojson
-	arrayData := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
-
-	// geojson features
-	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
-	if err := json.Unmarshal(arrayData, &gja); err == nil {
-		return gja, nil
+	gja3 := new([]*geojson.Feature) // Its important to reset this to avoid any mutation by previous attempt.
+	// if err := ndjson.Unmarshal(data, gja3); err == nil {
+	if err := json.Unmarshal(arrayBytes, gja3); err == nil {
+		return *gja3, nil
+	} else {
+		log.Println("error decoding as geojson ndjson:", err)
 	}
 
-	// trackpoint features
-	gja = []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 	trackPoints = trackPoint.TrackPoints{}
-	if err := json.Unmarshal(arrayData, &trackPoints); err == nil {
+	// if err := ndjson.Unmarshal(data, &trackPoints); err == nil {
+	if err := json.Unmarshal(arrayBytes, &trackPoints); err == nil {
+		gja4 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 		for _, tp := range trackPoints {
-			gja = append(gja, TrackToFeature(tp))
+			gja4 = append(gja4, TrackToFeature(tp))
 		}
-		return gja, nil
+		return gja4, nil
 	}
 
-	return gja, errDecodeTracks
+	return nil, errDecodeTracks
 }
 
 func populatePoints(w http.ResponseWriter, r *http.Request) {
-	dump, _ := httputil.DumpRequest(r, false)
-	log.Println("/populate/:", string(dump))
 
 	var body []byte
 	var err error
@@ -211,6 +255,8 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	log.Println("Decoding", len(body), "bytes")
+
 	features, err := decodeAnythingToGeoJSON(body)
 	if err != nil {
 		log.Println("error decoding body", err)
@@ -218,113 +264,21 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("populating", len(features), "features")
-
-	// var ndbod []byte
-	// err = json.Unmarshal(body, &trackPoints)
-	// // err = json.NewDecoder(ioutil.NopCloser(bytes.NewBuffer(body))).Decode(&trackPoints)
-	// if err != nil {
-	// 	log.Println("Could not decode json as array, body length was:", len(body))
-	//
-	// 	// try decoding as ndjson..
-	// 	ndbod = ndToJSONArray(io.NopCloser(bytes.NewBuffer(body)))
-	//
-	// 	log.Println("attempting decode as ndjson instead..., length:", len(ndbod), string(ndbod))
-	//
-	// 	// err = json.NewDecoder(&ndbuf).Decode(&trackPoints)
-	// 	err = json.Unmarshal(ndbod, &trackPoints)
-	// 	if err != nil {
-	// 		log.Println("could not decode req as ndjson, error:", err.Error())
-	//
-	// 		// err = json.Unmarshal(json.RawMessage(body), &trackPoints)
-	//
-	// 		http.Error(w, err.Error(), http.StatusBadRequest)
-	// 		return
-	// 	} else {
-	// 		log.Println("OK: decoded request as ndjson instead")
-	// 	}
-	// }
-	// if len(trackPoints) != 0 && trackPoints[0].Name == "" {
-	// 	log.Println("WARNING: trackpoints posted without name, trying geojson decode...")
-	// 	// maybe we accidentally unmarshalled geosjon points as trackpoints
-	// 	// try to unmarshal as geojson
-	// 	gjfc := []geojson.Feature{}
-	// 	by := body
-	// 	if ndbod != nil {
-	// 		by = ndbod
-	// 	}
-	// 	err = json.Unmarshal(by, &gjfc)
-	// 	if err != nil {
-	// 		log.Println("could not decode req as geojson, error:", err.Error())
-	// 		http.Error(w, err.Error(), http.StatusBadRequest)
-	// 		return
-	// 	} else {
-	// 		log.Println("OK: decoded request as geojson instead")
-	// 		trackPoints = trackPoint.TrackPoints{}
-	// 		for _, feat := range gjfc {
-	// 			tr, err := FeatureToTrack(feat)
-	// 			if err != nil {
-	// 				log.Println("error converting feature to trackpoint:", err)
-	// 				log.Println("body", string(by))
-	// 				log.Println("feature", feat)
-	// 				continue
-	// 			}
-	// 			trackPoints = append(trackPoints, &tr)
-	// 		}
-	// 	}
-	// }
-
-	// log.Println("checking token")
-	// tok := os.Getenv("COTOKEN")
-	// if tok == "" {
-	// 	log.Println("ERROR: no COTOKEN env var set")
-	// } else {
-	// 	log.Println("GOODNEWS: using COTOKEN for cat verification")
-	// 	// log.Println()
-	// 	// if b, _ := httputil.DumpRequest(r, true); b != nil {
-	// 	// 	log.Println(string(b))
-	// 	// }
-	// 	// log.Println()
-	// 	verified := false
-	// 	headerKey := "AuthorizationOfCats"
-	// 	if h := r.Header.Get(headerKey); h != "" {
-	// 		log.Println("using header verification...")
-	// 		if h == tok {
-	// 			log.Println("header OK")
-	// 			verified = true
-	// 		} else {
-	// 			log.Println("header verification failed: ", h)
-	// 		}
-	// 	} else {
-	// 		// catonmap.info:3001/populate?api_token=asdfasdfb
-	// 		r.ParseForm()
-	// 		if token := r.FormValue("api_token"); token != "" {
-	// 			if token == tok {
-	// 				log.Println("used token verification: OK")
-	// 				verified = true
-	// 			} else {
-	// 				log.Println("token verification failed:", token)
-	// 				verified = true
-	// 			}
-	// 		}
-	// 	}
-	// 	if verified {
-	// 		log.Println("GOODNEWS: verified cattracks posted remote.host:", r.RemoteAddr)
-	// 	} else {
-	// 		trackPoints.Unverified(r)
-	// 		log.Println("WARNING: unverified cattracks posted remote.host:", r.RemoteAddr)
-	// 	}
-	// }
+	log.Println("Decoded", len(features), "features")
+	if len(features) == 0 {
+		http.Error(w, "No features to populate", http.StatusBadRequest)
+		return
+	}
 
 	// goroutine keeps http req from blocking while points are processed
 	go func() {
-		errS := storePoints(features)
+		stored, errS := storePoints(features)
 		if errS != nil {
 			log.Println("store err:", errS)
 			// http.Error(w, errS.Error(), http.StatusInternalServerError)
 			return
 		}
-		log.Println("stored features", "len:", len(features))
+		log.Printf("Stored %d features\n", stored)
 	}()
 
 	// return empty json of empty trackpoints to not have to download tons of shit
@@ -342,7 +296,6 @@ func getLastKnown(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, e.Error(), http.StatusInternalServerError)
 		return
 	}
-	fmt.Println("Got lastknown:", len(b), "bytes")
 	w.Write(b)
 }
 

@@ -50,6 +50,9 @@ func SetTestes(flagOption bool) {
 func SetForwardPopulate(arguments string) {
 	forwardTargetRequests = make(map[url.URL]*ttlcache.Cache[int64, *forwardingQueueItem])
 	for _, rawURI := range strings.Split(arguments, ",") {
+		if rawURI == "" {
+			continue
+		}
 		uri, e := url.Parse(rawURI)
 		if e != nil {
 			panic(e)
@@ -59,8 +62,19 @@ func SetForwardPopulate(arguments string) {
 		)
 		// Start the cache cleaner
 		go forwardTargetRequests[*uri].Start()
-		log.Println("forwarding to", uri)
+		log.Println("-> Set forwarding target:", uri)
 	}
+
+	// Run an asynchronous loop repeating attempts to forward pending requests.
+	go func() {
+		ticker := time.NewTicker(60 * time.Second)
+		for {
+			select {
+			case <-ticker.C:
+				tryForwardPopulate()
+			}
+		}
+	}()
 }
 
 func SetLiveTracksGZ(pathto string) {

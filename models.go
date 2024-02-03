@@ -939,10 +939,9 @@ func storeLastKnown(feature *geojson.Feature) {
 		}
 		return nil
 	}); err != nil {
-		log.Printf("error storing last known: %v", err)
+		log.Printf("error storing last known: %v\n", err)
 	} else {
-		spewTP := spew.Sdump(feature)
-		log.Printf("updated last known=%v\ncurrent=%s", lk, spewTP)
+		log.Println("Last Known 🐈 /", CatTrackGeoJSON{*feature}.String())
 	}
 }
 
@@ -1342,10 +1341,12 @@ var FeaturePlaceChan = make(chan *geojson.Feature, 100000)
 
 var masterGZLock sync.Mutex
 
-func storePoints(features []*geojson.Feature) error {
+func storePoints(features []*geojson.Feature) (int, error) {
+	var stored = len(features)
 	var err error
+
 	if len(features) == 0 {
-		return errors.New("0 trackpoints to store")
+		return 0, errors.New("0 trackpoints to store")
 	}
 	// var f F
 	// var fdev F
@@ -1406,6 +1407,7 @@ func storePoints(features []*geojson.Feature) error {
 		// storePoint can modify the point, like tp.ID, tp.imgS3 field
 		e := storePoint(feature)
 		if e != nil {
+			stored--
 			log.Println("store point error: ", e)
 			continue
 		}
@@ -1434,7 +1436,7 @@ func storePoints(features []*geojson.Feature) error {
 		// err = storemetadata(features[l-1], l)
 		storeLastKnown(features[l-1])
 	}
-	return err
+	return stored, err
 }
 
 // func storePointVisit(point *trackPoint.TrackPoint, visit note.NoteVisit) error {
@@ -1509,28 +1511,17 @@ func mustGetTime(f *geojson.Feature) time.Time {
 }
 
 func buildTrackpointKey(tp *geojson.Feature) []byte {
-	tpUUID, ok := tp.Properties["UUID"].(string)
-	if !ok {
-		// Use ID if no UUID.
-		if tpID, ok := tp.Properties["ID"]; ok {
-			if tpID, ok := tpID.(int); ok {
-				return i64tob(int64(tpID))
-			}
-		}
-		// Use Name if no UUID and no ID.
-		if tpName, ok := tp.Properties["Name"]; ok {
-			if tpName, ok := tpName.(string); ok {
-				tpUUID = tpName
-			}
-		}
-		return i64tob(mustGetTime(tp).UnixNano())
-	}
+	tpUUID, _ := tp.Properties["UUID"].(string)
+	tpName, _ := tp.Properties["Name"].(string)
 
 	// have uuid
-	k := []byte{}
-	k = append(k, []byte(tpUUID)...)
-	k = append(k, i64tob(mustGetTime(tp).UnixNano())...)
-	return k
+	str := fmt.Sprintf("%s+%s+%d", tpName, tpUUID, mustGetTime(tp).Unix())
+	return []byte(str)
+	// k := []byte{}
+	// k = append(k, []byte(tpUUID)...)
+	// k = append(k, '+')
+	// k = append(k, i64tob(mustGetTime(tp).Unix())...)
+	// return k
 }
 
 var errDuplicatePoint = fmt.Errorf("duplicate point")
@@ -1595,15 +1586,15 @@ func storePoint(feat *geojson.Feature) error {
 	}
 
 	// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
-	feat.ID = tpTime.UnixNano() // dunno if can really get nanoy, or if will just *1000.
 	tpBoltKey := buildTrackpointKey(feat)
+	feat.ID = 0
 
 	// gets "" case nontestesing
 	feat.Properties["Name"] = getTestesPrefix() + feat.Properties["Name"].(string)
 
 	if _, ok := dedupeCache.Get(string(tpBoltKey)); ok {
 		// duplicate point
-		return errDuplicatePoint
+		return fmt.Errorf("%w: %s", errDuplicatePoint, tpBoltKey)
 	}
 	dedupeCache.Add(string(tpBoltKey), true)
 
