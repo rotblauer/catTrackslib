@@ -141,17 +141,29 @@ readloop:
 	// return out
 }
 
-var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or ndgeojson")
+var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or geojsonfc or ndtrackpoints or ndgeojson")
+
+func decodeTrackPoints(data []byte) (TrackPoints, error) {
+	trackPoints := TrackPoints{}
+	if err := json.Unmarshal(data, &trackPoints); err != nil {
+		return nil, err
+	}
+	if len(trackPoints) > 0 {
+		if trackPoints[0].Time.IsZero() {
+			return nil, errors.New("invalid trackpoint (missing or zero 'time' field)")
+		}
+	}
+	return trackPoints, nil
+}
 
 func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	// try to decode as trackpoints
-	trackPoints := TrackPoints{}
-	if err := json.Unmarshal(data, &trackPoints); err == nil {
-		gja2 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
+	if trackPoints, err := decodeTrackPoints(data); err == nil {
+		gja := []*geojson.Feature{}
 		for _, tp := range trackPoints {
-			gja2 = append(gja2, TrackToFeature(tp))
+			gja = append(gja, TrackToFeature(tp))
 		}
-		return gja2, nil
+		return gja, nil
 	}
 
 	// try to decode as geojson
@@ -171,20 +183,17 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	if err != nil {
 		return nil, err
 	}
-	log.Println("attempting decode as ndjson instead..., length:", len(arrayBytes), string(arrayBytes))
+	// log.Println("attempting decode as ndjson instead..., length:", len(arrayBytes), string(arrayBytes))
 
 	// try to decode as ndgeojson
 	gja3 := new([]*geojson.Feature) // Its important to reset this to avoid any mutation by previous attempt.
 	// if err := ndjson.Unmarshal(data, gja3); err == nil {
 	if err := json.Unmarshal(arrayBytes, gja3); err == nil {
 		return *gja3, nil
-	} else {
-		log.Println("error decoding as geojson ndjson:", err)
 	}
 
-	trackPoints = TrackPoints{}
 	// if err := ndjson.Unmarshal(data, &trackPoints); err == nil {
-	if err := json.Unmarshal(arrayBytes, &trackPoints); err == nil {
+	if trackPoints, err := decodeTrackPoints(arrayBytes); err == nil {
 		gja4 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 		for _, tp := range trackPoints {
 			gja4 = append(gja4, TrackToFeature(tp))

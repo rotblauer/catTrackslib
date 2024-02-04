@@ -23,7 +23,7 @@ type TrackPoint struct {
 	Accuracy        float64   `json:"accuracy"`       // horizontal, in meters
 	VAccuracy       float64   `json:"vAccuracy"`      // vertical, in meteres
 	Elevation       float64   `json:"elevation"`      // in meters
-	Speed           float64   `json:"speed"`          // in kilometers per hour
+	Speed           float64   `json:"speed"`          // in m/s
 	SpeedAccuracy   float64   `json:"speed_accuracy"` // in meters per second
 	Tilt            float64   `json:"tilt"`           // degrees?
 	Heading         float64   `json:"heading"`        // in degrees
@@ -127,9 +127,8 @@ func TrackToFeature2(tp *TrackPoint) *geojson.Feature {
 	return p
 }
 
+// TrackToFeature converts a TrackPoint to a GeoJSON feature.
 func TrackToFeature(trackPointCurrent *TrackPoint) *geojson.Feature {
-	// convert to a feature
-	// p := geojson.NewPoint(geojson.Coordinate{geojson.Coord(trackPointCurrent.Lng), geojson.Coord(trackPointCurrent.Lat)})
 	p := geojson.NewFeature(orb.Point{trackPointCurrent.Lng, trackPointCurrent.Lat})
 
 	// currently need speed, name,time
@@ -149,6 +148,12 @@ func TrackToFeature(trackPointCurrent *TrackPoint) *geojson.Feature {
 
 	if trackPointCurrent.VAccuracy > 0 {
 		props["vAccuracy"] = trackPointCurrent.VAccuracy
+	}
+	if trackPointCurrent.SpeedAccuracy > 0 {
+		props["speed_accuracy"] = trackPointCurrent.SpeedAccuracy
+	}
+	if trackPointCurrent.HeadingAccuracy > 0 {
+		props["heading_accuracy"] = trackPointCurrent.HeadingAccuracy
 	}
 
 	// not implemented yet

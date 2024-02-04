@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/rotblauer/tileTester2/note"
 )
@@ -72,41 +71,22 @@ func TestTimeZeroing(t *testing.T) {
 
 func TestDecodeAnythingToGeoJSON(t *testing.T) {
 
-	validate := func(got []*geojson.Feature, err error) {
+	validate := func(got []*geojson.Feature, err error) error {
 		if err != nil {
-			t.Error(err)
-			return
-		}
-		if len(got) != 10 {
-			t.Error("wrong length", len(got))
-		}
-		if got[0].Properties["Name"] != "tonga-moto-63b2" {
-			t.Error("wrong name")
-		}
-		if got[0].Geometry == nil {
-			t.Error("nil geometry")
-		} else {
-			if v, ok := got[0].Geometry.(orb.Point); !ok || v[0] != -111.6902394 {
-				t.Error("wrong lng", v[0])
-			}
-		}
-		if v, ok := got[0].Properties["Accuracy"].(float64); !ok || v != 7.4 {
-			t.Error("wrong accuracy", v)
+			return err
 		}
 
 		for _, f := range got {
 			if err := validatePoint(f); err != nil {
-				t.Error(err)
+				return err
 			}
 		}
-
-		if t.Failed() {
-			j, _ := json.MarshalIndent(got, "", "  ")
-			t.Log(string(j))
-		}
+		return nil
 	}
 
 	for _, f := range []string{
+		"testdata/ia.json",
+		"testdata/rye.json",
 		"testdata/trackpoints.json",
 		"testdata/trackpoints.geojson",
 		"testdata/trackpoints.featurecollection.geojson",
@@ -119,7 +99,13 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 				t.Fatal(err)
 			}
 			got, err := decodeAnythingToGeoJSON(data)
-			validate(got, err)
+			if err := validate(got, err); err != nil {
+				t.Error(err)
+			}
+			if t.Failed() {
+				j, _ := json.MarshalIndent(got, "", "  ")
+				t.Log(string(j))
+			}
 		})
 	}
 
