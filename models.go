@@ -630,7 +630,7 @@ func storePoint(feat *geojson.Feature) error {
 
 	hash, err := hashstructure.Hash(feat, hashstructure.FormatV2, nil)
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	if _, ok := dedupeCache.Get(hash); ok {
