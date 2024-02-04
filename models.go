@@ -932,3 +932,15 @@ func getCatSnaps(startTime, endTime time.Time) ([]*geojson.Feature, error) {
 
 	return features, err
 }
+
+// storeLastPushByCat stores the data of the last populate request.
+// It assumes that populate requests are unique to each cat, which may not always be true for tests/development.
+func storeLastPushByCat(catName string, data []byte) error {
+	datadir := filepath.Dir(tracksGZPath)
+	lastPushesDatadir := filepath.Join(datadir, "lastpushes")
+	if err := os.MkdirAll(lastPushesDatadir, 0755); err != nil {
+		return err
+	}
+	lastPushesPath := filepath.Join(lastPushesDatadir, catName+".json")
+	return os.WriteFile(lastPushesPath, data, 0644)
+}

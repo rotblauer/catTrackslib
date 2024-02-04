@@ -16,6 +16,7 @@ import (
 
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
+	catnames "github.com/rotblauer/cattracks-names"
 	"github.com/rotblauer/trackpoints/trackPoint"
 	// "os"
 	// "path"
@@ -221,11 +222,19 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
 	log.Println("Decoded", len(features), "features")
+
+	// Short circuit if no points decoded.
 	if len(features) == 0 {
 		http.Error(w, "No features to populate", http.StatusBadRequest)
 		return
+	}
+
+	if err := validatePoint(features[0]); err == nil {
+		catname := catnames.AliasOrSanitizedName(features[0].Properties["Name"].(string))
+		if err := storeLastPushByCat(catname, body); err != nil {
+			log.Println("store last push err:", err)
+		}
 	}
 
 	// goroutine keeps http req from blocking while points are processed
