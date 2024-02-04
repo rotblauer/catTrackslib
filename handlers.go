@@ -54,7 +54,6 @@ targetLoop:
 				log.Printf("-> forward populate: target=%s err=%q pending=%d\n", target.String(), err, cache.Len())
 				continue targetLoop
 			}
-			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 			if err := resp.Body.Close(); err != nil {
 				log.Println("forward populate failed to close body", err, "target:", target)
 				continue targetLoop
@@ -68,6 +67,7 @@ targetLoop:
 				continue targetLoop
 			}
 			cache.Delete(k)
+			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 		}
 	}
 }
