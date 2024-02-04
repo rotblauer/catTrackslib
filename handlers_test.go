@@ -9,7 +9,6 @@ import (
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	"github.com/rotblauer/tileTester2/note"
-	"github.com/rotblauer/trackpoints/trackPoint"
 )
 
 func TestValidVisitGrabbing(t *testing.T) {
@@ -24,7 +23,7 @@ func TestValidVisitGrabbing(t *testing.T) {
 	t.Log(tt)
 
 	// Rye8 38.633697509765625 -90.26709747314453 0 0 -1 0 -1 0 2018-11-08 13:30:52.85 +0000 UTC {"floorsAs
-	tp := trackPoint.TrackPoint{
+	tp := TrackPoint{
 		Uuid:      "9B4843BB-0EF7-4B54-832A-B6940304C531",
 		ID:        1541683852850000000,
 		Name:      "tester",

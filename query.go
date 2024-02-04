@@ -6,7 +6,6 @@ import (
 
 	"github.com/creack/httpreq"
 	"github.com/gorilla/mux"
-	"github.com/rotblauer/trackpoints/trackPoint"
 )
 
 const (
@@ -42,7 +41,7 @@ func (q *query) IsBounded() bool {
 	return true
 }
 
-func (q *query) PointInBounds(tp *trackPoint.TrackPoint) bool {
+func (q *query) PointInBounds(tp *TrackPoint) bool {
 	var inY = tp.Lat < q.Bounds.NorthEastLat && tp.Lat > q.Bounds.SouthWestLat
 	var inX = tp.Lng < q.Bounds.NorthEastLng && tp.Lng > q.Bounds.SouthWestLng
 	return inY && inX

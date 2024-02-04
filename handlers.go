@@ -17,7 +17,6 @@ import (
 	"github.com/jellydator/ttlcache/v3"
 	"github.com/paulmach/orb/geojson"
 	catnames "github.com/rotblauer/cattracks-names"
-	"github.com/rotblauer/trackpoints/trackPoint"
 	// "os"
 	// "path"
 )
@@ -146,7 +145,7 @@ var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or 
 
 func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	// try to decode as trackpoints
-	trackPoints := trackPoint.TrackPoints{}
+	trackPoints := TrackPoints{}
 	if err := json.Unmarshal(data, &trackPoints); err == nil {
 		gja2 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 		for _, tp := range trackPoints {
@@ -183,7 +182,7 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 		log.Println("error decoding as geojson ndjson:", err)
 	}
 
-	trackPoints = trackPoint.TrackPoints{}
+	trackPoints = TrackPoints{}
 	// if err := ndjson.Unmarshal(data, &trackPoints); err == nil {
 	if err := json.Unmarshal(arrayBytes, &trackPoints); err == nil {
 		gja4 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.

@@ -8,7 +8,6 @@ import (
 	"github.com/cridenour/go-postgis"
 	"github.com/davecgh/go-spew/spew"
 	_ "github.com/lib/pq"
-	"github.com/rotblauer/trackpoints/trackPoint"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -23,7 +22,7 @@ func collectUniqCatName(s string) {
 	uniqueCatNames = append(uniqueCatNames, s)
 }
 
-func pgTrackID(*trackPoint.TrackPoint) string {
+func pgTrackID(tp *TrackPoint) string {
 	return ""
 }
 
@@ -61,7 +60,7 @@ func ExportPostGIS(exportTarget string) {
 		// log.Printf("bucket stats: %+v", bucketStats)
 		for k, v := c.First(); k != nil && len(uniqueCatNames) < 2; k, v = c.Next() {
 			count++
-			var track trackPoint.TrackPoint
+			var track TrackPoint
 			err := json.Unmarshal(v, &track)
 			if err != nil {
 				log.Println(err)

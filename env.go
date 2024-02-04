@@ -11,8 +11,6 @@ import (
 
 	"github.com/jellydator/ttlcache/v3"
 	bolt "go.etcd.io/bbolt"
-
-	"github.com/rotblauer/trackpoints/trackPoint"
 )
 
 const (
@@ -129,7 +127,7 @@ func DeleteTestes() error {
 		b := tx.Bucket([]byte(trackKey))
 		c := b.Cursor()
 		for k, v := c.First(); k != nil; k, v = c.Next() {
-			var tp trackPoint.TrackPoint
+			var tp TrackPoint
 			e := json.Unmarshal(v, &tp)
 			if e != nil {
 				fmt.Println("Error deleting testes.")

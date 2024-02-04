@@ -4,10 +4,8 @@ import (
 	"encoding/json"
 	// "errors"
 	"fmt"
-	"time"
 
 	"github.com/asim/quadtree"
-	"github.com/rotblauer/trackpoints/trackPoint"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -50,7 +48,7 @@ func InitQT() error {
 
 		ver := b.ForEach(func(key, val []byte) error {
 
-			var tp trackPoint.TrackPoint
+			var tp TrackPoint
 			err := json.Unmarshal(val, &tp)
 			// fmt.Println(tp)
 			if err != nil {
@@ -78,27 +76,28 @@ func InitQT() error {
 	return e
 }
 
-func getPointsFromQT(query *query) (tps trackPoint.TPs) {
-	start := time.Now()
-
-	// build aabb rect
-	var center = make(map[string]float64)
-	center["lat"] = (query.Bounds.NorthEastLat + query.Bounds.SouthWestLat) / 2.0
-	center["lng"] = (query.Bounds.NorthEastLng + query.Bounds.SouthWestLng) / 2.0
-	cp := quadtree.NewPoint(center["lat"], center["lng"], nil)
-
-	// not totally sure what halfpoint means but best guess
-	half := trackPoint.Distance(center["lat"], center["lng"], center["lat"], query.Bounds.NorthEastLng)
-	hp := cp.HalfPoint(half)
-
-	ab := quadtree.NewAABB(cp, hp)
-	qres := GetQT().Search(ab)
-
-	for _, val := range qres {
-		tps = append(tps, val.Data().(*trackPoint.TrackPoint))
-	}
-
-	fmt.Println("Found ", len(qres), " points with quadtree method in ", time.Since(start))
-
-	return tps
-}
+//
+// func getPointsFromQT(query *query) (tps TPs) {
+// 	start := time.Now()
+//
+// 	// build aabb rect
+// 	var center = make(map[string]float64)
+// 	center["lat"] = (query.Bounds.NorthEastLat + query.Bounds.SouthWestLat) / 2.0
+// 	center["lng"] = (query.Bounds.NorthEastLng + query.Bounds.SouthWestLng) / 2.0
+// 	cp := quadtree.NewPoint(center["lat"], center["lng"], nil)
+//
+// 	// not totally sure what halfpoint means but best guess
+// 	half := trackPoint.Distance(center["lat"], center["lng"], center["lat"], query.Bounds.NorthEastLng)
+// 	hp := cp.HalfPoint(half)
+//
+// 	ab := quadtree.NewAABB(cp, hp)
+// 	qres := GetQT().Search(ab)
+//
+// 	for _, val := range qres {
+// 		tps = append(tps, val.Data().(*TrackPoint))
+// 	}
+//
+// 	fmt.Println("Found ", len(qres), " points with quadtree method in ", time.Since(start))
+//
+// 	return tps
+// }
