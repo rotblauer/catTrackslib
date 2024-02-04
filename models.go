@@ -633,12 +633,13 @@ func storePoint(feat *geojson.Feature) error {
 		return err
 	}
 
-	if _, ok := dedupeCache.Get(hash); ok {
+	dedupeKey := fmt.Sprintf("%d", hash)
+	if _, ok := dedupeCache.Get(dedupeKey); ok {
 		// duplicate point
 		dump := spew.Sdump(feat)
 		return fmt.Errorf("%w: %d\n%s\n", errDuplicatePoint, hash, dump)
 	}
-	dedupeCache.Add(hash, true)
+	dedupeCache.Add(dedupeKey, true)
 
 	// handle storing images
 	if feat.Properties["imgB64"] == nil {
