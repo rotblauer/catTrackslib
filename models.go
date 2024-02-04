@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -29,6 +30,7 @@ import (
 	"github.com/aws/aws-sdk-go/aws/request"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/s3"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/groupcache/lru"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
@@ -426,14 +428,12 @@ var FeaturePlaceChan = make(chan *geojson.Feature, 100000)
 var masterGZLock sync.Mutex
 
 func storePoints(features []*geojson.Feature) (int, error) {
-	var stored = len(features)
 	var err error
 
 	if len(features) == 0 {
 		return 0, errors.New("0 trackpoints to store")
 	}
-	// var f F
-	// var fdev F
+
 	var fedge F
 	featureChan := make(chan *geojson.Feature, 100000)
 	featureChanDevop := make(chan *geojson.Feature, 100000)
@@ -472,14 +472,49 @@ func storePoints(features []*geojson.Feature) (int, error) {
 		}()
 	}
 
+	// Validate all features, splicing out any invalid ones.
+	// Invalid ones will be logged (with their error), but not stored.
+	// https://stackoverflow.com/a/20551116/4401322 How to remove items from a slice while ranging it.
+	i := 0 // output index
+	for _, x := range features {
+		if err := validatePoint(x); err == nil {
+			// copy and increment index
+			features[i] = x
+			i++
+		} else {
+			dump := spew.Sdump(x)
+			log.Println("validatePoint error: ", err, "feature: ", dump)
+		}
+	}
+	// Prevent memory leak by erasing truncated values
+	// (not needed if values don't contain pointers, directly or indirectly)
+	for j := i; j < len(features); j++ {
+		features[j] = nil
+	}
+	features = features[:i]
+
+	// Sort the features by time (minimum increment 1 second), then by accuracy.
+	// This is important for the deduplication process, which will always accept the first of any duplicate set.
+	sort.Slice(features, func(i, j int) bool {
+		ti := mustGetTime(features[i])
+		tj := mustGetTime(features[j])
+		if ti.Unix() == tj.Unix() {
+			ai := features[i].Properties["Accuracy"].(float64)
+			aj := features[j].Properties["Accuracy"].(float64)
+			return ai < aj
+		}
+		return ti.Before(tj)
+	})
+
+	stored := 0
 	for _, feature := range features {
 		// storePoint can modify the point, like tp.ID, tp.imgS3 field
 		e := storePoint(feature)
 		if e != nil {
-			stored--
 			log.Println("store point error: ", e)
 			continue
 		}
+		stored++
 		if tracksGZPath != "" {
 			featureChan <- feature
 		}
@@ -514,6 +549,7 @@ func mustGetTime(f *geojson.Feature) time.Time {
 }
 
 func buildTrackpointKey(tp *geojson.Feature) []byte {
+	// We know these exist because validatePoint assures that they exist and are strings.
 	tpUUID, _ := tp.Properties["UUID"].(string)
 	tpName, _ := tp.Properties["Name"].(string)
 
@@ -538,10 +574,19 @@ func validatePoint(tp *geojson.Feature) error {
 	if tp.Geometry == nil {
 		return fmt.Errorf("nil geometry")
 	}
-	if _, ok := tp.Geometry.(orb.Point); !ok {
+	if pt, ok := tp.Geometry.(orb.Point); !ok {
 		return fmt.Errorf("not a point")
+	} else {
+		ptLng, ptLat := pt[0], pt[1]
 
+		if ptLat > 90 || ptLat < -90 {
+			return fmt.Errorf("invalid coordinate: lat=%.14f", ptLat)
+		}
+		if ptLng > 180 || ptLng < -180 {
+			return fmt.Errorf("invalid coordinate: lng=%.14f", ptLng)
+		}
 	}
+
 	if tp.Properties == nil {
 		return fmt.Errorf("nil properties")
 	}
@@ -563,30 +608,18 @@ func validatePoint(tp *geojson.Feature) error {
 	if _, ok := tp.Properties["Time"]; !ok {
 		return fmt.Errorf("missing field: Time")
 	}
+	if v, ok := tp.Properties["Accuracy"]; !ok {
+		return fmt.Errorf("missing field: Accuracy")
+	} else if _, ok := v.(float64); !ok {
+		return fmt.Errorf("accuracy not a float64")
+	}
 	return nil
 }
 
 func storePoint(feat *geojson.Feature) error {
 	var err error
 
-	if err := validatePoint(feat); err != nil {
-		return err
-	}
-
 	tpTime := mustGetTime(feat)
-
-	pt, ok := feat.Geometry.(orb.Point)
-	if !ok {
-		return fmt.Errorf("not a point: %v", feat.Geometry)
-	}
-	ptLng, ptLat := pt[0], pt[1]
-
-	if ptLat > 90 || ptLat < -90 {
-		return fmt.Errorf("invalid coordinate: lat=%.14f", ptLat)
-	}
-	if ptLng > 180 || ptLng < -180 {
-		return fmt.Errorf("invalid coordinate: lng=%.14f", ptLng)
-	}
 
 	// Note that tp.ID is not the db key. ID is a uniq identifier per cat only.
 	tpBoltKey := buildTrackpointKey(feat)
