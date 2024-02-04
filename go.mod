@@ -16,6 +16,7 @@ require (
 	github.com/gorilla/schema v1.2.0
 	github.com/jellydator/ttlcache/v3 v3.1.1
 	github.com/lib/pq v1.10.6
+	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/montanaflynn/stats v0.6.6
 	github.com/olahol/melody v0.0.0-20180227134253-7bd65910e5ab
 	github.com/paulmach/orb v0.11.0

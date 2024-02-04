@@ -21,7 +21,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"sync"
 	"time"
 
@@ -32,6 +31,7 @@ import (
 	"github.com/aws/aws-sdk-go/service/s3"
 	"github.com/davecgh/go-spew/spew"
 	"github.com/golang/groupcache/lru"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
 	note "github.com/rotblauer/catnotelib"
@@ -493,18 +493,18 @@ func storePoints(features []*geojson.Feature) (int, error) {
 	}
 	features = features[:i]
 
-	// Sort the features by time (minimum increment 1 second), then by accuracy.
-	// This is important for the deduplication process, which will always accept the first of any duplicate set.
-	sort.Slice(features, func(i, j int) bool {
-		ti := mustGetTime(features[i])
-		tj := mustGetTime(features[j])
-		if ti.Unix() == tj.Unix() {
-			ai := features[i].Properties["Accuracy"].(float64)
-			aj := features[j].Properties["Accuracy"].(float64)
-			return ai < aj
-		}
-		return ti.Before(tj)
-	})
+	// // Sort the features by time (minimum increment 1 second), then by accuracy.
+	// // This is important for the deduplication process, which will always accept the first of any duplicate set.
+	// sort.Slice(features, func(i, j int) bool {
+	// 	ti := mustGetTime(features[i])
+	// 	tj := mustGetTime(features[j])
+	// 	if ti.Unix() == tj.Unix() {
+	// 		ai := features[i].Properties["Accuracy"].(float64)
+	// 		aj := features[j].Properties["Accuracy"].(float64)
+	// 		return ai < aj
+	// 	}
+	// 	return ti.Before(tj)
+	// })
 
 	stored := 0
 	for _, feature := range features {
@@ -628,11 +628,17 @@ func storePoint(feat *geojson.Feature) error {
 	// gets "" case nontestesing
 	feat.Properties["Name"] = getTestesPrefix() + feat.Properties["Name"].(string)
 
-	if _, ok := dedupeCache.Get(string(tpBoltKey)); ok {
-		// duplicate point
-		return fmt.Errorf("%w: %s", errDuplicatePoint, tpBoltKey)
+	hash, err := hashstructure.Hash(feat, hashstructure.FormatV2, nil)
+	if err != nil {
+		panic(err)
 	}
-	dedupeCache.Add(string(tpBoltKey), true)
+
+	if _, ok := dedupeCache.Get(hash); ok {
+		// duplicate point
+		dump := spew.Sdump(feat)
+		return fmt.Errorf("%w: %d\n%s\n", errDuplicatePoint, hash, dump)
+	}
+	dedupeCache.Add(hash, true)
 
 	// handle storing images
 	if feat.Properties["imgB64"] == nil {
