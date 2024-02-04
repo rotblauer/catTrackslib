@@ -21,6 +21,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"sync"
 	"time"
 
@@ -493,18 +494,18 @@ func storePoints(features []*geojson.Feature) (int, error) {
 	}
 	features = features[:i]
 
-	// // Sort the features by time (minimum increment 1 second), then by accuracy.
-	// // This is important for the deduplication process, which will always accept the first of any duplicate set.
-	// sort.Slice(features, func(i, j int) bool {
-	// 	ti := mustGetTime(features[i])
-	// 	tj := mustGetTime(features[j])
-	// 	if ti.Unix() == tj.Unix() {
-	// 		ai := features[i].Properties["Accuracy"].(float64)
-	// 		aj := features[j].Properties["Accuracy"].(float64)
-	// 		return ai < aj
-	// 	}
-	// 	return ti.Before(tj)
-	// })
+	// Sort the features by time (minimum increment 1 second), then by accuracy.
+	// This is important for the deduplication process, which will always accept the first of any duplicate set.
+	sort.Slice(features, func(i, j int) bool {
+		ti := mustGetTime(features[i])
+		tj := mustGetTime(features[j])
+		if ti.Unix() == tj.Unix() {
+			ai := features[i].Properties["Accuracy"].(float64)
+			aj := features[j].Properties["Accuracy"].(float64)
+			return ai < aj
+		}
+		return ti.Before(tj)
+	})
 
 	stored := 0
 	for _, feature := range features {
