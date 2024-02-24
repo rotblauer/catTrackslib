@@ -98,7 +98,7 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			got, err := decodeAnythingToGeoJSON(data)
+			got, err := DecodeAnythingToGeoJSON(data)
 			if err := validate(got, err); err != nil {
 				t.Error(err)
 			}
@@ -115,7 +115,7 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	// got, err := decodeAnythingToGeoJSON(ndData)
+	// got, err := DecodeAnythingToGeoJSON(ndData)
 	// validate(got, err)
 	//
 	// t.Log("GeoJSON FeatureCollection")
@@ -124,7 +124,7 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	// got, err = decodeAnythingToGeoJSON(geoJSONFCData)
+	// got, err = DecodeAnythingToGeoJSON(geoJSONFCData)
 	// validate(got, err)
 	//
 	// t.Log("GeoJSON array")
@@ -133,7 +133,7 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	// got, err = decodeAnythingToGeoJSON(geoJSONData)
+	// got, err = DecodeAnythingToGeoJSON(geoJSONData)
 	// validate(got, err)
 	//
 	// t.Log("Trackpoint array")
@@ -142,7 +142,7 @@ func TestDecodeAnythingToGeoJSON(t *testing.T) {
 	// if err != nil {
 	// 	t.Fatal(err)
 	// }
-	// got, err = decodeAnythingToGeoJSON(trackpointData)
+	// got, err = DecodeAnythingToGeoJSON(trackpointData)
 	// validate(got, err)
 	//
 	// // geoJSONFCFile := "testdata/trackpoints.geojson"

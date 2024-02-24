@@ -141,9 +141,9 @@ readloop:
 	// return out
 }
 
-var errDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or geojsonfc or ndtrackpoints or ndgeojson")
+var ErrDecodeTracks = fmt.Errorf("could not decode as trackpoints or geojson or geojsonfc or ndtrackpoints or ndgeojson")
 
-func decodeTrackPoints(data []byte) (TrackPoints, error) {
+func DecodeTrackPoints(data []byte) (TrackPoints, error) {
 	trackPoints := TrackPoints{}
 	if err := json.Unmarshal(data, &trackPoints); err != nil {
 		return nil, err
@@ -156,9 +156,9 @@ func decodeTrackPoints(data []byte) (TrackPoints, error) {
 	return trackPoints, nil
 }
 
-func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
+func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	// try to decode as trackpoints
-	if trackPoints, err := decodeTrackPoints(data); err == nil {
+	if trackPoints, err := DecodeTrackPoints(data); err == nil {
 		gja := []*geojson.Feature{}
 		for _, tp := range trackPoints {
 			gja = append(gja, TrackToFeature(tp))
@@ -193,7 +193,7 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	}
 
 	// if err := ndjson.Unmarshal(data, &trackPoints); err == nil {
-	if trackPoints, err := decodeTrackPoints(arrayBytes); err == nil {
+	if trackPoints, err := DecodeTrackPoints(arrayBytes); err == nil {
 		gja4 := []*geojson.Feature{} // Its important to reset this to avoid any mutation by previous attempt.
 		for _, tp := range trackPoints {
 			gja4 = append(gja4, TrackToFeature(tp))
@@ -201,7 +201,7 @@ func decodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 		return gja4, nil
 	}
 
-	return nil, errDecodeTracks
+	return nil, ErrDecodeTracks
 }
 
 func populatePoints(w http.ResponseWriter, r *http.Request) {
@@ -224,7 +224,7 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 
 	log.Println("Decoding", len(body), "bytes")
 
-	features, err := decodeAnythingToGeoJSON(body)
+	features, err := DecodeAnythingToGeoJSON(body)
 	if err != nil {
 		log.Println("error decoding body", err)
 		http.Error(w, err.Error(), http.StatusInternalServerError)
