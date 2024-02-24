@@ -9,6 +9,7 @@ import (
 
 	"github.com/paulmach/orb"
 	"github.com/paulmach/orb/geojson"
+	catnames "github.com/rotblauer/cattracks-names"
 )
 
 // TrackPoint Stores a snippet of life, love, and location
@@ -136,6 +137,12 @@ func TrackToFeature(trackPointCurrent *TrackPoint) *geojson.Feature {
 	defer func() {
 		p.Properties = props
 	}()
+
+	// If an alias exists for the cat, install it as a property.
+	if alias := catnames.AliasOrName(trackPointCurrent.Name); alias != trackPointCurrent.Name {
+		props["Alias"] = alias
+	}
+
 	props["UUID"] = trackPointCurrent.Uuid
 	props["Name"] = trackPointCurrent.Name
 	props["Time"] = trackPointCurrent.Time
