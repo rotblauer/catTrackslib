@@ -128,11 +128,11 @@ var FeaturePlaceChan = make(chan *geojson.Feature, 100000)
 
 var masterGZLock sync.Mutex
 
-func storePoints(features []*geojson.Feature) (int, error) {
+func storePoints(features []*geojson.Feature) ([]*geojson.Feature, error) {
 	var err error
 
 	if len(features) == 0 {
-		return 0, errors.New("0 trackpoints to store")
+		return nil, errors.New("0 trackpoints to store")
 	}
 
 	var fedge F
@@ -229,7 +229,7 @@ func storePoints(features []*geojson.Feature) (int, error) {
 		// err = storemetadata(features[l-1], l)
 		storeLastKnown(features[l-1])
 	}
-	return stored, err
+	return features, err
 }
 
 func mustGetTime(f *geojson.Feature) time.Time {
@@ -313,6 +313,25 @@ func validatePoint(tp *geojson.Feature) error {
 		return fmt.Errorf("missing field: Accuracy")
 	} else if _, ok := v.(float64); !ok {
 		return fmt.Errorf("accuracy not a float64")
+	}
+	return nil
+}
+
+// validatePopulateFeatures checks that all features are valid AS A GROUP.
+// (Validation of individual features is done in validatePoint.)
+// So this aserts the 'integrity' of a 'batch' of features.
+// We assert that:
+// - all tracks pushed in a request to populate belong to the same cat
+func validatePopulateFeatures(features []*geojson.Feature) error {
+	name := features[0].Properties["Name"].(string)
+	uuid := features[0].Properties["UUID"].(string)
+	for _, f := range features {
+		if f.Properties["Name"].(string) != name {
+			return fmt.Errorf("name mismatch (all features must belong to same cat)")
+		}
+		if f.Properties["UUID"].(string) != uuid {
+			return fmt.Errorf("UUID mismatch (all features must belong to same cat)")
+		}
 	}
 	return nil
 }

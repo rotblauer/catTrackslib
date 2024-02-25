@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/jellydator/ttlcache/v3"
+	"github.com/paulmach/orb/geojson"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -20,6 +21,9 @@ const (
 var testes = false
 var forwardTargetRequests map[url.URL]*ttlcache.Cache[int64, *forwardingQueueItem]
 var forwardTargetRequestsLock = sync.Mutex{}
+
+var lastPushTTLCache = ttlcache.New[string, []*geojson.Feature](
+	ttlcache.WithTTL[string, []*geojson.Feature](24 * time.Hour))
 
 var tracksGZPath string
 var tracksGZPathDevop string

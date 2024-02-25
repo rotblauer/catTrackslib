@@ -245,6 +245,12 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if err := validatePopulateFeatures(features); err != nil {
+		log.Println("validate features err:", err)
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	// goroutine keeps http req from blocking while points are processed
 	go func() {
 		stored, errS := storePoints(features)
@@ -253,7 +259,14 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 			// http.Error(w, errS.Error(), http.StatusInternalServerError)
 			return
 		}
-		log.Printf("Stored %d features\n", stored)
+		log.Printf("Stored %d features\n", len(stored))
+
+		catname := catnames.AliasOrSanitizedName(features[0].Properties["Name"].(string))
+		lastPushTTLCache.Set(catname, stored, ttlcache.DefaultTTL)
+
+		broadcast := broadcats{Action: websocketActionPopulate, Features: stored}
+		b, _ := json.Marshal(broadcast)
+		GetMelody().Broadcast(b)
 	}()
 
 	// return empty json of empty trackpoints to not have to download tons of shit

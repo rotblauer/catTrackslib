@@ -124,6 +124,11 @@ func forwardPopulateMiddleware(next http.Handler) http.Handler {
 
 func NewRouter() *mux.Router {
 
+	m := InitMelody()
+	http.HandleFunc("/socat", func(w http.ResponseWriter, r *http.Request) {
+		m.HandleRequest(w, r)
+	})
+
 	/*
 		StrictSlash defines the trailing slash behavior for new routes. The initial value is false.
 		When true, if the route path is "/path/", accessing "/path" will perform a redirect to the former and vice versa. In other words, your application will always see the path as specified in the route.
