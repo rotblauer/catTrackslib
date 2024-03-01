@@ -174,10 +174,10 @@ func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 
 	// try to decode as geojson feature collection
 	gjfc := geojson.NewFeatureCollection()
-	if err := json.Unmarshal(data, gjfc); err == nil {
+	if err := gjfc.UnmarshalJSON(data); err == nil {
 		return gjfc.Features, nil
 	}
-
+	
 	// ! FIXME This passes the test, but it doesn't work in the real world.
 	arrayBytes, err := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
 	if err != nil {
