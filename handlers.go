@@ -212,16 +212,16 @@ func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 		return gja, nil
 	}
 
-	// try to decode as geojson
-	gja := []*geojson.Feature{}
-	if err := json.Unmarshal(data, &gja); err == nil {
-		return gja, nil
-	}
-
 	// try to decode as geojson feature collection
 	gjfc := geojson.NewFeatureCollection()
 	if err := gjfc.UnmarshalJSON(data); err == nil {
 		return gjfc.Features, nil
+	}
+
+	// try to decode as geojson
+	gja := []*geojson.Feature{}
+	if err := json.Unmarshal(data, &gja); err == nil {
+		return gja, nil
 	}
 
 	// ! FIXME This passes the test, but it doesn't work in the real world.
