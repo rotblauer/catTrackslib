@@ -9,6 +9,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/http/httptest"
+	"net/http/httputil"
 	"os"
 	"strconv"
 	"time"
@@ -26,54 +28,91 @@ type forwardingQueueItem struct {
 }
 
 func tryForwardPopulate() {
-	client := &http.Client{Timeout: time.Second * 10}
+	// client := &http.Client{Timeout: time.Second * 10}
 
 	forwardTargetRequestsLock.Lock()
 	defer forwardTargetRequestsLock.Unlock()
 
 targetLoop:
 	for target, cache := range forwardTargetRequests {
+		prox := httputil.NewSingleHostReverseProxy(&target)
+		prox.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Println("-> forward populate error:", err, "target:", target)
+		}
+		prox.FlushInterval = time.Millisecond * 100
+		prox.Transport = &http.Transport{
+			MaxIdleConns: 100,
+		}
+		prox.ModifyResponse = func(resp *http.Response) error {
+			// log.Println("-> forward populate: target=", target, "status=", resp.Status, "pending=", cache.Len())
+			return nil
+		}
+
 		if cache.Len() == 0 {
 			continue
 		}
 		for k, v := range cache.Items() {
-			req := v.Value().request
-			req.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
-			newReq, err := http.NewRequest(req.Method, target.String(), req.Body)
-			if err != nil {
-				log.Println("-> forward populate error:", err, "target:", target)
-				continue targetLoop
-			}
-			newReq.Header = req.Header.Clone()
-			newReq.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
-			newReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
-			newReq.Header.Set("Cat-Forwarded-For", req.RemoteAddr)
 
-			resp, err := client.Do(newReq)
-			if err != nil || resp == nil {
-				log.Printf("-> forward populate: target=%s err=%q pending=%d\n", target.String(), err, cache.Len())
-				continue targetLoop
-			}
-			if err := resp.Body.Close(); err != nil {
-				log.Println("forward populate failed to close body", err, "target:", target)
+			r := v.Value().request
+			r.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
+			r.Header.Set("Cat-Forwarded-For", r.RemoteAddr)
+
+			rw := httptest.NewRecorder()
+			prox.ServeHTTP(rw, r)
+			rw.Flush()
+
+			if rw.Result() != nil {
+				cache.Delete(k)
+				log.Println("-> forward populate: target=", target, "status=", rw.Result().Status, "pending=", cache.Len())
+			} else {
+				log.Println("-> forward populate: target=", target, "status=nil pending=", cache.Len())
 				continue targetLoop
 			}
 
-			// If we depend on a 200 response, then BadRequests
-			// will not get purged from the cache, even though
-			// the target server isn't down.
-			// We handle the 'server down' case in the error handling above,
-			// so this should go.
-			// if resp.StatusCode != http.StatusOK {
-			// 	log.Println("forward populate failed, status:", resp.Status, "target:", target)
-			// 	// log the request for debugging
-			// 	if b, _ := httputil.DumpRequest(newReq, false); b != nil {
-			// 		log.Println(string(b))
-			// 	}
+			// req := v.Value().request.Clone(ctx)
+			// req.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
+			//
+			// req.URL = &target
+			// req.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
+			// req.ContentLength = int64(len(v.Value().payload))
+			// req.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
+			// req.Header.Set("X-Forwarded-For", req.RemoteAddr)
+			// req.Header.Set("Cat-Forwarded-For", req.RemoteAddr)
+			//
+			// newReq, err := http.NewRequest(req.Method, target.String(), req.Body)
+			// if err != nil {
+			// 	log.Println("-> forward populate error:", err, "target:", target)
 			// 	continue targetLoop
 			// }
-			cache.Delete(k)
-			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
+			// newReq.Header = req.Header.Clone()
+			// newReq.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
+			// newReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
+			// newReq.Header.Set("Cat-Forwarded-For", req.RemoteAddr)
+			//
+			// resp, err := client.Do(newReq)
+			// if err != nil || resp == nil {
+			// 	log.Printf("-> forward populate: target=%s err=%q pending=%d\n", target.String(), err, cache.Len())
+			// 	continue targetLoop
+			// }
+			// if err := resp.Body.Close(); err != nil {
+			// 	log.Println("forward populate failed to close body", err, "target:", target)
+			// 	continue targetLoop
+			// }
+			//
+			// // If we depend on a 200 response, then BadRequests
+			// // will not get purged from the cache, even though
+			// // the target server isn't down.
+			// // We handle the 'server down' case in the error handling above,
+			// // so this should go.
+			// // if resp.StatusCode != http.StatusOK {
+			// // 	log.Println("forward populate failed, status:", resp.Status, "target:", target)
+			// // 	// log the request for debugging
+			// // 	if b, _ := httputil.DumpRequest(newReq, false); b != nil {
+			// // 		log.Println(string(b))
+			// // 	}
+			// // 	continue targetLoop
+			// // }
+			// log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 		}
 	}
 }
