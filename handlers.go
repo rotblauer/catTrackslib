@@ -174,7 +174,7 @@ func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 
 	// try to decode as geojson feature collection
 	gjfc := geojson.NewFeatureCollection()
-	if err := json.Unmarshal(data, &gjfc); err == nil {
+	if err := json.Unmarshal(data, gjfc); err == nil {
 		return gjfc.Features, nil
 	}
 
