@@ -3,6 +3,7 @@ package catTrackslib
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/url"
 	"strings"
@@ -42,6 +43,10 @@ var (
 // SetTestes run
 func SetTestes(flagOption bool) {
 	testes = flagOption
+}
+
+func SetLogOutput(w io.Writer) {
+	log.SetOutput(w)
 }
 
 // SetForwardPopulate sets the 'downstream' urls that should be forwarded
