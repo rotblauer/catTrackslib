@@ -253,12 +253,18 @@ func forwardPopulateMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func NewRouter() *mux.Router {
+type RouterOpts struct {
+	DisableWebsocket bool
+}
 
-	m := InitMelody()
-	http.HandleFunc("/socat", func(w http.ResponseWriter, r *http.Request) {
-		m.HandleRequest(w, r)
-	})
+func NewRouter(opts *RouterOpts) *mux.Router {
+
+	if !opts.DisableWebsocket {
+		m := InitMelody()
+		http.HandleFunc("/socat", func(w http.ResponseWriter, r *http.Request) {
+			m.HandleRequest(w, r)
+		})
+	}
 
 	/*
 		StrictSlash defines the trailing slash behavior for new routes. The initial value is false.
