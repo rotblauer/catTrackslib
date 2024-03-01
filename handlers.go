@@ -9,7 +9,6 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"net/http/httputil"
 	"os"
 	"strconv"
 	"time"
@@ -57,14 +56,20 @@ targetLoop:
 				log.Println("forward populate failed to close body", err, "target:", target)
 				continue targetLoop
 			}
-			if resp.StatusCode != http.StatusOK {
-				log.Println("forward populate failed, status:", resp.Status, "target:", target)
-				// log the request for debugging
-				if b, _ := httputil.DumpRequest(newReq, false); b != nil {
-					log.Println(string(b))
-				}
-				continue targetLoop
-			}
+
+			// If we depend on a 200 response, then BadRequests
+			// will not get purged from the cache, even though
+			// the target server isn't down.
+			// We handle the 'server down' case in the error handling above,
+			// so this should go.
+			// if resp.StatusCode != http.StatusOK {
+			// 	log.Println("forward populate failed, status:", resp.Status, "target:", target)
+			// 	// log the request for debugging
+			// 	if b, _ := httputil.DumpRequest(newReq, false); b != nil {
+			// 		log.Println(string(b))
+			// 	}
+			// 	continue targetLoop
+			// }
 			cache.Delete(k)
 			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 		}
