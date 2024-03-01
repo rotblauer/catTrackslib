@@ -3,6 +3,7 @@ package catTrackslib
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -37,7 +38,7 @@ targetLoop:
 	for target, cache := range forwardTargetRequests {
 		prox := httputil.NewSingleHostReverseProxy(&target)
 		prox.ErrorHandler = func(w http.ResponseWriter, r *http.Request, err error) {
-			log.Println("-> forward populate error:", err, "target:", target)
+			log.Println("-> forward populate error:", err, "target:", target.String())
 		}
 		prox.FlushInterval = time.Millisecond * 100
 		prox.Transport = &http.Transport{
@@ -53,7 +54,8 @@ targetLoop:
 		}
 		for k, v := range cache.Items() {
 
-			r := v.Value().request
+			r := v.Value().request.Clone(context.Background())
+
 			r.Body = io.NopCloser(bytes.NewBuffer(v.Value().payload))
 			r.Header.Set("Cat-Forwarded-For", r.RemoteAddr)
 
