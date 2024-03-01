@@ -301,7 +301,7 @@ func NewRouter(opts *RouterOpts) *mux.Router {
 	populateRoutes.Use(forwardPopulateMiddleware)
 
 	populateRoutes.Path("/populate/").HandlerFunc(populatePoints).Methods(http.MethodPost)
-	populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
+	// populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
 
 	return router
 }

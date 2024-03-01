@@ -100,12 +100,15 @@ targetLoop:
 				continue targetLoop
 			}
 
-			if resp.StatusCode >= 400 {
+			if resp.StatusCode >= http.StatusBadRequest {
 				log.Println("forward populate failed, status:", resp.Status, "target:", target)
 				// log the request for debugging
 				if b, _ := httputil.DumpRequest(newReq, false); b != nil {
 					log.Println(string(b))
 				}
+			}
+			// Bad requests are the problem of the client, not ours.
+			if resp.StatusCode > http.StatusBadRequest {
 				continue targetLoop
 			}
 			cache.Delete(k)
