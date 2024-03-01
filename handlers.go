@@ -46,6 +46,7 @@ targetLoop:
 			}
 			newReq.Header = req.Header.Clone()
 			newReq.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
+			newReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
 
 			resp, err := client.Do(newReq)
 			if err != nil || resp == nil {
@@ -227,7 +228,11 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Println("Decoding", len(body), "bytes")
+	if len(body) > 80 {
+		log.Println("Decoding", len(body), "bytes: ", string(body)[:80], "...")
+	} else {
+		log.Println("Decoding", len(body), "bytes: ", string(body))
+	}
 
 	features, err := DecodeAnythingToGeoJSON(body)
 	if err != nil {
@@ -268,12 +273,14 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 		}
 		log.Printf("Stored %d features\n", len(stored))
 
-		catname := catnames.AliasOrSanitizedName(features[0].Properties["Name"].(string))
-		lastPushTTLCache.Set(catname, stored, ttlcache.DefaultTTL)
+		if len(stored) > 0 {
+			catname := catnames.AliasOrSanitizedName(features[0].Properties["Name"].(string))
+			lastPushTTLCache.Set(catname, stored, ttlcache.DefaultTTL)
 
-		broadcast := broadcats{Action: websocketActionPopulate, Features: stored}
-		b, _ := json.Marshal(broadcast)
-		GetMelody().Broadcast(b)
+			broadcast := broadcats{Action: websocketActionPopulate, Features: stored}
+			b, _ := json.Marshal(broadcast)
+			GetMelody().Broadcast(b)
+		}
 	}()
 
 	// return empty json of empty trackpoints to not have to download tons of shit
