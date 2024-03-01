@@ -207,7 +207,7 @@ func storePoints(features []*geojson.Feature) ([]*geojson.Feature, error) {
 		return ti.Before(tj)
 	})
 
-	stored := 0
+	stored := []*geojson.Feature{}
 	for _, feature := range features {
 		// storePoint can modify the point, like tp.ID, tp.imgS3 field
 		e := storePoint(feature)
@@ -215,7 +215,7 @@ func storePoints(features []*geojson.Feature) ([]*geojson.Feature, error) {
 			log.Println("store point error: ", e)
 			continue
 		}
-		stored++
+		stored = append(stored, feature)
 		if tracksGZPath != "" {
 			featureChan <- feature
 		}
@@ -229,7 +229,7 @@ func storePoints(features []*geojson.Feature) ([]*geojson.Feature, error) {
 		// err = storemetadata(features[l-1], l)
 		storeLastKnown(features[l-1])
 	}
-	return features, err
+	return stored, err
 }
 
 func mustGetTime(f *geojson.Feature) time.Time {
