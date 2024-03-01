@@ -177,7 +177,7 @@ func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
 	if err := gjfc.UnmarshalJSON(data); err == nil {
 		return gjfc.Features, nil
 	}
-	
+
 	// ! FIXME This passes the test, but it doesn't work in the real world.
 	arrayBytes, err := ndToJSONArray(io.NopCloser(bytes.NewBuffer(data)))
 	if err != nil {
@@ -234,9 +234,11 @@ func populatePoints(w http.ResponseWriter, r *http.Request) {
 
 	// Short circuit if no points decoded.
 	if len(features) == 0 {
+		log.Println("bad pusher", r.Header.Get("X-Forwarded-For")
 		http.Error(w, "No features to populate", http.StatusBadRequest)
 		return
 	}
+	log.Println("good pusher", r.Header.Get("X-Forwarded-For")
 
 	if err := validatePoint(features[0]); err == nil {
 		catname := catnames.AliasOrSanitizedName(features[0].Properties["Name"].(string))
