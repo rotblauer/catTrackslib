@@ -101,7 +101,10 @@ func buildCommonLogLine(req *http.Request, url url.URL, ts time.Time, status int
 	}
 
 	if req.Header.Get("X-Forwarded-For") != "" {
-		host += "[ -> " + req.Header.Get("X-Forwarded-For") + "]"
+		host += "->" + req.Header.Get("X-Forwarded-For")
+	}
+	if req.Header.Get("Cat-Forwarded-For") != "" {
+		host += "=>" + req.Header.Get("Cat-Forwarded-For")
 	}
 
 	uri := req.RequestURI

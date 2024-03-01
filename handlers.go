@@ -47,6 +47,7 @@ targetLoop:
 			newReq.Header = req.Header.Clone()
 			newReq.Header.Set("Content-Length", strconv.Itoa(len(v.Value().payload)))
 			newReq.Header.Set("X-Forwarded-For", req.RemoteAddr)
+			newReq.Header.Set("Cat-Forwarded-For", req.RemoteAddr)
 
 			resp, err := client.Do(newReq)
 			if err != nil || resp == nil {
