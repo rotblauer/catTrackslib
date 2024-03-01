@@ -51,6 +51,7 @@ targetLoop:
 		if cache.Len() == 0 {
 			continue
 		}
+		keysToDelete := []int64{}
 		for k, v := range cache.Items() {
 
 			// r := v.Value().request.Clone(context.Background())
@@ -82,7 +83,7 @@ targetLoop:
 
 			newReq, err := http.NewRequest(req.Method, target.String(), req.Body)
 			if err != nil {
-				log.Println("-> forward populate error:", err, "target:", target)
+				log.Println("-> forward populate error:", err, "target:", target, "k:", k)
 				continue targetLoop
 			}
 			newReq.Header = req.Header.Clone()
@@ -92,11 +93,11 @@ targetLoop:
 
 			resp, err := client.Do(newReq)
 			if err != nil || resp == nil {
-				log.Printf("-> forward populate: target=%s err=%q pending=%d\n", target.String(), err, cache.Len())
+				log.Printf("-> forward populate: k=%v target=%s err=%q pending=%d\n", k, target.String(), err, cache.Len())
 				continue targetLoop
 			}
 			if err := resp.Body.Close(); err != nil {
-				log.Println("forward populate failed to close body", err, "target:", target)
+				log.Println("forward populate failed to close body", err, "target:", target, "k:", k)
 				continue targetLoop
 			}
 
@@ -107,12 +108,16 @@ targetLoop:
 					log.Println(string(b))
 				}
 			}
-			// Bad requests are the problem of the client, not ours.
+			// If the response was GREATER THAN a 400, continue (persisting the cache value).
+			// Otherwise, it's either a 400 or < 400, so we'll delete the cache value.
 			if resp.StatusCode > http.StatusBadRequest {
 				continue targetLoop
 			}
+			keysToDelete = append(keysToDelete, k)
+			log.Printf("-> forward populate: k=%v target=%s status=%s pending=%d\n", k, target.String(), resp.Status, cache.Len())
+		}
+		for _, k := range keysToDelete {
 			cache.Delete(k)
-			log.Printf("-> forward populate: target=%s status=%s pending=%d\n", target.String(), resp.Status, cache.Len())
 		}
 	}
 }
@@ -198,8 +203,9 @@ func DecodeTrackPoints(data []byte) (TrackPoints, error) {
 		if trackPoints[0].Time.IsZero() {
 			return nil, errors.New("invalid trackpoint (missing or zero 'time' field)")
 		}
+		return trackPoints, nil
 	}
-	return trackPoints, nil
+	return nil, errors.New("empty trackpoints")
 }
 
 func DecodeAnythingToGeoJSON(data []byte) ([]*geojson.Feature, error) {
