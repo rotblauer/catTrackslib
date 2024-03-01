@@ -51,7 +51,6 @@ targetLoop:
 		if cache.Len() == 0 {
 			continue
 		}
-		keysToDelete := []int64{}
 		for k, v := range cache.Items() {
 
 			// r := v.Value().request.Clone(context.Background())
@@ -113,11 +112,8 @@ targetLoop:
 			if resp.StatusCode > http.StatusBadRequest {
 				continue targetLoop
 			}
-			keysToDelete = append(keysToDelete, k)
-			log.Printf("-> forward populate: k=%v target=%s status=%s pending=%d\n", k, target.String(), resp.Status, cache.Len())
-		}
-		for _, k := range keysToDelete {
 			cache.Delete(k)
+			log.Printf("-> forward populate: k=%v target=%s status=%s pending=%d\n", k, target.String(), resp.Status, cache.Len())
 		}
 	}
 }
