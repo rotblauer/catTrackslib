@@ -1,7 +1,6 @@
 package catTrackslib
 
 import (
-	"bytes"
 	"io"
 	"log"
 	"net"
@@ -177,33 +176,11 @@ func contentTypeMiddlewareFor(contentType string) func(http.Handler) http.Handle
 	}
 }
 
-// // Define our struct
-// type authenticationMiddleware struct {
-// 	tokenUsers map[string]string
-// }
-//
-// // Middleware function, which will be called for each request
-// func (amw *authenticationMiddleware) Middleware(next http.Handler) http.Handler {
-// 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-// 		token := r.Header.Get("X-Session-Token")
-//
-// 		if user, found := amw.tokenUsers[token]; found {
-// 			// We found the token in our map
-// 			log.Printf("Authenticated user %s\n", user)
-// 			// Pass down the request to the next middleware (or final handler)
-// 			next.ServeHTTP(w, r)
-// 		} else {
-// 			// Write an error and stop the handler chain
-// 			http.Error(w, "Forbidden", http.StatusForbidden)
-// 		}
-// 	})
-// }
-
 func tokenAuthenticationMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		validToken := os.Getenv("COTOKEN")
 		if validToken == "" {
-			log.Printf("No COTOKEN set, allowing all requests")
+			log.Printf("WARN: No COTOKEN set, allowing all requests")
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -229,26 +206,6 @@ func tokenAuthenticationMiddleware(next http.Handler) http.Handler {
 		}
 
 		// Pass down the request to the next middleware (or final handler)
-		next.ServeHTTP(w, r)
-	})
-}
-
-func forwardPopulateMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-
-		// Read and replace the body.
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			log.Println("Error reading body:", err)
-			http.Error(w, "Error reading body", http.StatusBadRequest)
-			return
-		}
-		r.Body = io.NopCloser(bytes.NewBuffer(body))
-
-		// Call the forward populate handler.
-		go handleForwardPopulate(r, body)
-
-		// Call the next handler, which can be another middleware in the chain, or the final handler.
 		next.ServeHTTP(w, r)
 	})
 }
@@ -298,10 +255,9 @@ func NewRouter(opts *RouterOpts) *mux.Router {
 	authenticatedAPIRoutes.Use(tokenAuthenticationMiddleware)
 
 	populateRoutes := authenticatedAPIRoutes.NewRoute().Subrouter()
-	populateRoutes.Use(forwardPopulateMiddleware)
 
 	populateRoutes.Path("/populate/").HandlerFunc(populatePoints).Methods(http.MethodPost)
-	// populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
+	populateRoutes.Path("/populate").HandlerFunc(populatePoints).Methods(http.MethodPost)
 
 	return router
 }

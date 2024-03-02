@@ -78,7 +78,11 @@ func SetForwardPopulate(arguments string) {
 		for {
 			select {
 			case <-ticker.C:
-				tryForwardPopulate()
+				if forwardPopulateLastRun.Add(60 * time.Second).Before(time.Now()) {
+					forwardTargetRequestsLock.Lock()
+					tryForwardPopulate()
+					forwardTargetRequestsLock.Unlock()
+				}
 			}
 		}
 	}()
